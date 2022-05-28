@@ -1,0 +1,9 @@
+textures .png   ->   bin.mio0.o         -> leveldata.mio0.o -> sm64
+levels   .png        actors.mio0.o
+actors   .png
+levels   .in
+skyconv
+cake
+text
+ultra64.a
+goddard.a

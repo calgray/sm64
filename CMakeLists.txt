@@ -7,6 +7,7 @@ set(LD_SCRIPT sm64.ld)
 #set( BIN_NAME             ${TARGET_NAME}.bin )
 set( ROM_NAME             ${TARGET_NAME}.z64 )
 set( VERSION              us )
+set( LOCALE               us )
 
 # Tested with Unix Makefiles build dir
 set(BUILD_DIR             "CMakeFiles/${TARGET_NAME}.dir")
@@ -61,7 +62,220 @@ set(MOD_INCLUDES
 
 set(TOOLS_DIR ${CMAKE_CURRENT_LIST_DIR}/tools)
 
+###############################################################
+# preprocess + generate localized text for courses and dialogs
+###############################################################
+# file(GLOB_RECURSE COURSE_INCS RELATIVE ${CMAKE_CURRENT_LIST_DIR}
+#     text/*/courses.h
+# )
+# file(GLOB_RECURSE DIALOGS_INCS RELATIVE ${CMAKE_CURRENT_LIST_DIR}
+#     text/*/dialogs.h
+# )
+set(TEXT_SRCS
+    #text/define_courses.inc.c
+    text/define_text.inc.c
+)
+
+# WARNING!!! custom output dir must start with either _,a,b,c,d,e,f,g,h,i,j,k,l,m,n,o
+set(text_dir ${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/_localized_text.dir)
+
+foreach(TEXT_SRC ${TEXT_SRCS})
+    cmake_path(GET TEXT_SRC PARENT_PATH file_dir)
+    cmake_path(GET TEXT_SRC FILENAME file_out)
+    #set(out_path ${file_dir}/${VERSION}/${file_out}) # e.g. text/us/define_text.inc.c
+    file(MAKE_DIRECTORY ${text_dir}/${file_dir}/${VERSION})
+    set(out_path ${text_dir}/${file_dir}/${VERSION}/${file_out})
+
+    add_custom_command(
+        OUTPUT ${out_path}.preprocessed
+        #BYPRODUCTS ${out_path}.preprocessed
+        MAIN_DEPENDENCY ${TEXT_SRC}
+        #COMMAND
+        #    mkdir -p ${text_dir}
+        #COMMENT "Generating ${out_path}.preprocessed"
+        COMMAND
+            #COMMAND clang -E -P -x c -Wno-trigraphs
+            ${CMAKE_C_PREPROCESSOR} -P -Wno-trigraphs
+            -I${CMAKE_CURRENT_LIST_DIR}/include
+            -I${BUILD_DIR}
+            -I${BUILD_DIR}/include
+            -I${CMAKE_CURRENT_LIST_DIR}/src
+            -I${CMAKE_CURRENT_LIST_DIR}
+            -I${CMAKE_CURRENT_LIST_DIR}/include/libc
+            -I${CMAKE_CURRENT_LIST_DIR}/text/us
+            -DVERSION_US=1 -DF3D_OLD=1
+            -o ${out_path}.preprocessed
+            ${CMAKE_CURRENT_LIST_DIR}/${TEXT_SRC}
+        #WORKING_DIRECTORY ${text_dir}
+    )
+
+    add_custom_target(${file_out}
+        SOURCES ${out_path}.preprocessed
+        BYPRODUCTS ${out_path}
+        COMMENT "Generating ${out_path}"
+        COMMAND
+            ${TOOLS_DIR}/textconv ${CMAKE_CURRENT_LIST_DIR}/charmap.txt
+            ${out_path}.preprocessed
+            ${out_path}
+            #${TARGET_FILE}
+        #BYPRODUCTS ${CMAKE_CURRENT_BINARY_DIR}/${out_path}
+        #MAIN_DEPENDENCY ${CMAKE_CURRENT_LIST_DIR}/${TEXT_SRC}
+        #WORKING_DIRECTORY ${text_dir}
+    )
+    #get_target_property(TARGET_SOURCE_DIR ${file_out} SOURCE_DIR)
+    #message("TARGET_SOURCE_DIR: ${TARGET_SOURCE_DIR}")
+    
+endforeach()
+
+#add_library(define_text OBJECT ${CMAKE_CURRENT_BINARY_DIR}/${out_path})
+
+####################
+# Preprocess Levels
+####################
+set(LEVEL_SRC
+    levels/level_headers.h.in
+)
+cmake_path(GET LEVEL_SRC PARENT_PATH file_dir)
+cmake_path(GET LEVEL_SRC STEM LAST_ONLY file_out)
+add_custom_command(TARGET PRE-${TARGET_NAME}
+        PRE_BUILD
+        COMMENT "Generating include/${file_out}"
+        COMMAND mkdir -p ${BUILD_DIR}/include
+        #COMMAND ${CMAKE_C_PREPROCESSOR} -I ${CMAKE_CURRENT_LIST_DIR}
+        COMMAND clang -E -P -x c -Wno-trigraphs
+        -I${CMAKE_CURRENT_LIST_DIR}/include
+        -I${BUILD_DIR}
+        -I${BUILD_DIR}/include
+        -I${CMAKE_CURRENT_LIST_DIR}/src
+        -I${CMAKE_CURRENT_LIST_DIR}
+        -I${CMAKE_CURRENT_LIST_DIR}/include/libc
+        -DVERSION_US=1 -DF3D_OLD=1
+        ${CMAKE_CURRENT_LIST_DIR}/${LEVEL_SRC} | sed -E 's|\(.+\)|\#include \"\\1\"|' > ${BUILD_DIR}/include/${file_out}
+        BYPRODUCTS ${BUILD_DIR}/${file_out}
+        MAIN_DEPENDENCY ${CMAKE_CURRENT_LIST_DIR}/${LEVEL_SRC}
+    )
+
+########################
+# generate text headers
+########################
+# TODO: output to bin folder
+set(TEXT_SRCS
+    include/text_strings.h.in
+    include/text_menu_strings.h.in
+)
+foreach(TEXT_SRC ${TEXT_SRCS})
+    cmake_path(GET TEXT_SRC PARENT_PATH file_dir)
+    cmake_path(GET TEXT_SRC STEM LAST_ONLY file_out)
+    set(file_out ${file_dir}/${file_out})
+    add_custom_command(TARGET PRE-${TARGET_NAME}
+        PRE_BUILD
+        COMMENT "Generating ${file_out}"
+        COMMAND mkdir -p ${BUILD_DIR}/${file_dir}
+        COMMAND ${TOOLS_DIR}/textconv ${CMAKE_CURRENT_LIST_DIR}/charmap.txt
+        ${CMAKE_CURRENT_LIST_DIR}/${TEXT_SRC}
+        ${BUILD_DIR}/${file_out}
+        BYPRODUCTS ${BUILD_DIR}/${file_out}
+        MAIN_DEPENDENCY ${CMAKE_CURRENT_LIST_DIR}/${TEXT_SRC}
+    )
+endforeach()
+
+##################
+# generate images
+##################
+
+set(TEXTURE_ENCODING u8)
+file(GLOB_RECURSE IMAGE_SRCS RELATIVE ${CMAKE_CURRENT_LIST_DIR}
+    textures/*.rgba32.png
+    textures/*.rgba16.png
+    textures/*.ia16.png
+    textures/*.ia8.png
+    textures/*.ia4.png
+    textures/*.ia1.png
+    textures/*.i8.png
+    textures/*.i4.png
+    levels/*.rgba32.png
+    levels/*.rgba16.png
+    levels/*.ia16.png
+    levels/*.ia8.png
+    levels/*.ia4.png
+    levels/*.ia1.png
+    levels/*.i8.png
+    levels/*.i4.png
+    actors/*.rgba32.png
+    actors/*.rgba16.png
+    actors/*.ia16.png
+    actors/*.ia8.png
+    actors/*.ia4.png
+    actors/*.ia1.png
+    actors/*.i8.png
+    actors/*.i4.png
+)
+foreach(IMAGE_SRC ${IMAGE_SRCS})
+    cmake_path(GET IMAGE_SRC PARENT_PATH file_dir)
+    cmake_path(GET IMAGE_SRC STEM LAST_ONLY file_out)
+    cmake_path(GET IMAGE_SRC EXTENSION file_ext)
+    string(REGEX MATCHALL "\\.[^.]*" file_exts ${file_ext})
+    list(REVERSE file_exts)
+    list(GET file_exts 1 file_type)
+    string(REGEX MATCH "[^.]*$" file_type ${file_type})
+    add_custom_command(TARGET PRE-${TARGET_NAME}
+        #OUTPUT ${BUILD_DIR}/${file_out}.inc.c
+        PRE_BUILD
+        COMMENT "Generating ${file_type} src ${file_dir}/${file_out}.inc.c"
+        COMMAND mkdir -p ${BUILD_DIR}/${file_dir}
+        COMMAND
+        ${TOOLS_DIR}/n64graphics -s ${TEXTURE_ENCODING}
+        -i ${BUILD_DIR}/${file_dir}/${file_out}.inc.c
+        -g ${CMAKE_CURRENT_LIST_DIR}/${IMAGE_SRC}
+        -f ${file_type}
+        BYPRODUCTS ${BUILD_DIR}/${file_out}.inc.c
+        MAIN_DEPENDENCY ${CMAKE_CURRENT_LIST_DIR}/${IMAGE_SRC}
+    )
+    add_custom_command(TARGET PRE-${TARGET_NAME}
+        #OUTPUT ${BUILD_DIR}/${file_out}
+        PRE_BUILD
+        COMMENT "Generating raw ${file_dir}/${file_out}"
+        COMMAND mkdir -p ${BUILD_DIR}/${file_dir}
+        COMMAND
+        ${TOOLS_DIR}/n64graphics -s raw
+        -i ${BUILD_DIR}/${file_dir}/${file_out}
+        -g ${CMAKE_CURRENT_LIST_DIR}/${IMAGE_SRC}
+        -f ${file_type}
+        BYPRODUCTS ${BUILD_DIR}/${file_out}
+        MAIN_DEPENDENCY ${CMAKE_CURRENT_LIST_DIR}/${IMAGE_SRC}
+    )
+endforeach()
+
+# generate image color indexes
+
+
+# add_library(images OBJECT
+#     ${IMAGE_SRCS}
+# )
+# add_dependencies(${TARGET_NAME} images)
+
+
+######################
+# generate sky images
+######################
+add_custom_command(TARGET PRE-${TARGET_NAME}
+    PRE_BUILD
+    COMMENT "Generating ${BUILD_DIR}/levels/ending/cake.inc.c"
+    COMMAND ${TOOLS_DIR}/skyconv --type cake --split ${CMAKE_CURRENT_LIST_DIR}/levels/ending/cake.png ${BUILD_DIR}/levels/ending
+)
+add_custom_command(TARGET PRE-${TARGET_NAME}
+    PRE_BUILD
+    COMMENT "Generating ${BUILD_DIR}/bin/water_skybox.c"
+    COMMAND ${TOOLS_DIR}/skyconv --type sky --split ${CMAKE_CURRENT_LIST_DIR}/textures/skyboxes/water.png ${BUILD_DIR}/bin
+)
+
+#####################
+# Generate sounds
+#####################
+
+############################################
 # Generate Level Compressed ELF Load Points
+############################################
 file(GLOB_RECURSE LEVEL_SRCS RELATIVE ${CMAKE_CURRENT_LIST_DIR}
     levels/*leveldata.c
 )
@@ -156,7 +370,10 @@ foreach(LEVEL_SRC ${LEVEL_SRCS})
 endforeach()
 
 
+############################################
+# Levels
 # Generate Common Compressed ELF Load Points
+############################################
 file(GLOB_RECURSE BIN_SRCS RELATIVE ${CMAKE_CURRENT_LIST_DIR}
     bin/*.c
     # actors/group0.c
@@ -264,7 +481,11 @@ foreach(BIN_SRC ${BIN_SRCS})
     add_dependencies(PRE-${TARGET_NAME} ${bin_target})
 endforeach()
 
+
+
+###########################
 # Generate final project
+###########################
 add_executable(${TARGET_NAME}
     ${ASM_SRCS}
     ${SOUND_SRCS}
@@ -342,186 +563,6 @@ foreach(RSP_SRC ${RSP_SRCS})
         MAIN_DEPENDENCY ${CMAKE_CURRENT_LIST_DIR}/${RSP_SRC}
     )
 endforeach()
-
-####################
-# Preprocess Levels
-####################
-set(LEVEL_SRC
-    levels/level_headers.h.in
-)
-cmake_path(GET LEVEL_SRC PARENT_PATH file_dir)
-cmake_path(GET LEVEL_SRC STEM LAST_ONLY file_out)
-add_custom_command(TARGET PRE-${TARGET_NAME}
-        PRE_BUILD
-        COMMENT "Generating include/${file_out}"
-        COMMAND mkdir -p ${BUILD_DIR}/include
-        #COMMAND ${CMAKE_C_PREPROCESSOR} -I ${CMAKE_CURRENT_LIST_DIR}
-        COMMAND clang -E -P -x c -Wno-trigraphs
-        -I${CMAKE_CURRENT_LIST_DIR}/include
-        -I${BUILD_DIR}
-        -I${BUILD_DIR}/include
-        -I${CMAKE_CURRENT_LIST_DIR}/src
-        -I${CMAKE_CURRENT_LIST_DIR}
-        -I${CMAKE_CURRENT_LIST_DIR}/include/libc
-        -DVERSION_US=1 -DF3D_OLD=1
-        ${CMAKE_CURRENT_LIST_DIR}/${LEVEL_SRC} | sed -E 's|\(.+\)|\#include \"\\1\"|' > ${BUILD_DIR}/include/${file_out}
-        BYPRODUCTS ${BUILD_DIR}/${file_out}
-        MAIN_DEPENDENCY ${CMAKE_CURRENT_LIST_DIR}/${LEVEL_SRC}
-    )
-
-########################
-# generate text headers
-########################
-# TODO: output to bin folder
-set(TEXT_SRCS
-    include/text_strings.h.in
-    include/text_menu_strings.h.in
-)
-foreach(TEXT_SRC ${TEXT_SRCS})
-    cmake_path(GET TEXT_SRC PARENT_PATH file_dir)
-    cmake_path(GET TEXT_SRC STEM LAST_ONLY file_out)
-    set(file_out ${file_dir}/${file_out})
-    add_custom_command(TARGET PRE-${TARGET_NAME}
-        PRE_BUILD
-        COMMENT "Generating ${file_out}"
-        COMMAND mkdir -p ${BUILD_DIR}/${file_dir}
-        COMMAND ${TOOLS_DIR}/textconv ${CMAKE_CURRENT_LIST_DIR}/charmap.txt
-        ${CMAKE_CURRENT_LIST_DIR}/${TEXT_SRC}
-        ${BUILD_DIR}/${file_out}
-        BYPRODUCTS ${BUILD_DIR}/${file_out}
-        MAIN_DEPENDENCY ${CMAKE_CURRENT_LIST_DIR}/${TEXT_SRC}
-    )
-endforeach()
-
-#########################################
-# preprocess + generate course dialogues
-#########################################
-file(GLOB_RECURSE COURSE_INCS RELATIVE ${CMAKE_CURRENT_LIST_DIR}
-    text/*/courses.h
-)
-file(GLOB_RECURSE DIALOGS_INCS RELATIVE ${CMAKE_CURRENT_LIST_DIR}
-    text/*/dialogs.h
-)
-set(TEXT_SRCS
-    #text/define_courses.inc.c
-    text/define_text.inc.c
-)
-foreach(TEXT_SRC ${TEXT_SRCS})
-    cmake_path(GET TEXT_SRC PARENT_PATH file_dir)
-    cmake_path(GET TEXT_SRC FILENAME file_out)
-    set(out_path ${file_dir}/${VERSION}/${file_out})
-    add_custom_command(TARGET PRE-${TARGET_NAME}
-        PRE_BUILD
-        COMMENT "Generating ${out_path}"
-        COMMAND mkdir -p ${BUILD_DIR}/${file_dir}/${VERSION}
-        COMMAND clang -E -P -x c -Wno-trigraphs
-        -I${CMAKE_CURRENT_LIST_DIR}/include
-        -I${BUILD_DIR}
-        -I${BUILD_DIR}/include
-        -I${CMAKE_CURRENT_LIST_DIR}/src
-        -I${CMAKE_CURRENT_LIST_DIR}
-        -I${CMAKE_CURRENT_LIST_DIR}/include/libc
-        -I${CMAKE_CURRENT_LIST_DIR}/text/us
-        -DVERSION_US=1 -DF3D_OLD=1
-        -o ${BUILD_DIR}/${out_path}.in
-        ${CMAKE_CURRENT_LIST_DIR}/${TEXT_SRC}
-        COMMAND ${TOOLS_DIR}/textconv ${CMAKE_CURRENT_LIST_DIR}/charmap.txt
-        ${BUILD_DIR}/${out_path}.in
-        ${BUILD_DIR}/${out_path}
-        BYPRODUCTS ${BUILD_DIR}/${out_path}
-        MAIN_DEPENDENCY ${CMAKE_CURRENT_LIST_DIR}/${TEXT_SRC}
-    )
-endforeach()
-
-##################
-# generate images
-##################
-
-set(TEXTURE_ENCODING u8)
-file(GLOB_RECURSE IMAGE_SRCS RELATIVE ${CMAKE_CURRENT_LIST_DIR}
-    # textures/*.rgba32.png
-    # textures/*.rgba16.png
-    # textures/*.ia16.png
-    # textures/*.ia8.png
-    # textures/*.ia4.png
-    # textures/*.ia1.png
-    # textures/*.i8.png
-    # textures/*.i4.png
-    # levels/*.rgba32.png
-    # levels/*.rgba16.png
-    # levels/*.ia16.png
-    # levels/*.ia8.png
-    # levels/*.ia4.png
-    # levels/*.ia1.png
-    # levels/*.i8.png
-    # levels/*.i4.png
-    # actors/*.rgba32.png
-    # actors/*.rgba16.png
-    # actors/*.ia16.png
-    # actors/*.ia8.png
-    # actors/*.ia4.png
-    # actors/*.ia1.png
-    # actors/*.i8.png
-    # actors/*.i4.png
-)
-foreach(IMAGE_SRC ${IMAGE_SRCS})
-    cmake_path(GET IMAGE_SRC PARENT_PATH file_dir)
-    cmake_path(GET IMAGE_SRC STEM LAST_ONLY file_out)
-    cmake_path(GET IMAGE_SRC EXTENSION file_ext)
-    string(REGEX MATCHALL "\\.[^.]*" file_exts ${file_ext})
-    list(REVERSE file_exts)
-    list(GET file_exts 1 file_type)
-    string(REGEX MATCH "[^.]*$" file_type ${file_type})
-    add_custom_command(TARGET PRE-${TARGET_NAME}
-        #OUTPUT ${BUILD_DIR}/${file_out}.inc.c
-        PRE_BUILD
-        COMMENT "Generating ${file_type} src ${file_dir}/${file_out}.inc.c"
-        COMMAND mkdir -p ${BUILD_DIR}/${file_dir}
-        COMMAND
-        ${TOOLS_DIR}/n64graphics -s ${TEXTURE_ENCODING}
-        -i ${BUILD_DIR}/${file_dir}/${file_out}.inc.c
-        -g ${CMAKE_CURRENT_LIST_DIR}/${IMAGE_SRC}
-        -f ${file_type}
-        BYPRODUCTS ${BUILD_DIR}/${file_out}.inc.c
-        MAIN_DEPENDENCY ${CMAKE_CURRENT_LIST_DIR}/${IMAGE_SRC}
-    )
-    add_custom_command(TARGET PRE-${TARGET_NAME}
-        #OUTPUT ${BUILD_DIR}/${file_out}
-        PRE_BUILD
-        COMMENT "Generating raw ${file_dir}/${file_out}"
-        COMMAND mkdir -p ${BUILD_DIR}/${file_dir}
-        COMMAND
-        ${TOOLS_DIR}/n64graphics -s raw
-        -i ${BUILD_DIR}/${file_dir}/${file_out}
-        -g ${CMAKE_CURRENT_LIST_DIR}/${IMAGE_SRC}
-        -f ${file_type}
-        BYPRODUCTS ${BUILD_DIR}/${file_out}
-        MAIN_DEPENDENCY ${CMAKE_CURRENT_LIST_DIR}/${IMAGE_SRC}
-    )
-endforeach()
-
-# generate image color indexes
-
-
-# add_library(images OBJECT
-#     ${IMAGE_SRCS}
-# )
-# add_dependencies(${TARGET_NAME} images)
-
-
-######################
-# generate sky images
-######################
-add_custom_command(TARGET PRE-${TARGET_NAME}
-    PRE_BUILD
-    COMMENT "Generating ${BUILD_DIR}/levels/ending/cake.inc.c"
-    COMMAND ${TOOLS_DIR}/skyconv --type cake --split ${CMAKE_CURRENT_LIST_DIR}/levels/ending/cake.png ${BUILD_DIR}/levels/ending
-)
-add_custom_command(TARGET PRE-${TARGET_NAME}
-    PRE_BUILD
-    COMMENT "Generating ${BUILD_DIR}/bin/water_skybox.c"
-    COMMAND ${TOOLS_DIR}/skyconv --type sky --split ${CMAKE_CURRENT_LIST_DIR}/textures/skyboxes/water.png ${BUILD_DIR}/bin
-)
 
 
 ###################
