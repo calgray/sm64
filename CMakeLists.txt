@@ -62,6 +62,7 @@ set(MOD_INCLUDES
 
 set(TOOLS_DIR ${CMAKE_CURRENT_LIST_DIR}/tools)
 
+
 ###############################################################
 # preprocess + generate localized text for courses and dialogs
 ###############################################################
@@ -72,29 +73,28 @@ set(TOOLS_DIR ${CMAKE_CURRENT_LIST_DIR}/tools)
 #     text/*/dialogs.h
 # )
 set(TEXT_SRCS
-    #text/define_courses.inc.c
+    text/define_courses.inc.c
     text/define_text.inc.c
 )
 
 # WARNING!!! custom output dir must start with either _,a,b,c,d,e,f,g,h,i,j,k,l,m,n,o
-set(text_dir ${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/_localized_text.dir)
-
+set(text_target_dir "CMakeFiles/_localized_text.dir")
 foreach(TEXT_SRC ${TEXT_SRCS})
     cmake_path(GET TEXT_SRC PARENT_PATH file_dir)
     cmake_path(GET TEXT_SRC FILENAME file_out)
-    #set(out_path ${file_dir}/${VERSION}/${file_out}) # e.g. text/us/define_text.inc.c
-    file(MAKE_DIRECTORY ${text_dir}/${file_dir}/${VERSION})
-    set(out_path ${text_dir}/${file_dir}/${VERSION}/${file_out})
+    #set(out_path ${file_dir}/${VERSION}/${file_out}) 
+    set(out_dir ${file_dir}/${LOCALE})
+    set(small_out_path CMakeFiles/_localized_text.dir/${file_dir}/${LOCALE}/${file_out})
+    # e.g. text/us/define_text.inc.c
 
+    set(text_dir ${CMAKE_CURRENT_BINARY_DIR}/${text_target_dir})
+    set(out_path ${text_dir}/${out_dir}/${file_out})
     add_custom_command(
         OUTPUT ${out_path}.preprocessed
-        #BYPRODUCTS ${out_path}.preprocessed
         MAIN_DEPENDENCY ${TEXT_SRC}
-        #COMMAND
-        #    mkdir -p ${text_dir}
-        #COMMENT "Generating ${out_path}.preprocessed"
         COMMAND
-            #COMMAND clang -E -P -x c -Wno-trigraphs
+            mkdir -p ${text_dir}/${out_dir}
+        COMMAND
             ${CMAKE_C_PREPROCESSOR} -P -Wno-trigraphs
             -I${CMAKE_CURRENT_LIST_DIR}/include
             -I${BUILD_DIR}
@@ -106,28 +106,21 @@ foreach(TEXT_SRC ${TEXT_SRCS})
             -DVERSION_US=1 -DF3D_OLD=1
             -o ${out_path}.preprocessed
             ${CMAKE_CURRENT_LIST_DIR}/${TEXT_SRC}
-        #WORKING_DIRECTORY ${text_dir}
     )
-
     add_custom_target(${file_out}
         SOURCES ${out_path}.preprocessed
         BYPRODUCTS ${out_path}
-        COMMENT "Generating ${out_path}"
+        COMMENT "Generating ${small_out_path}"
         COMMAND
             ${TOOLS_DIR}/textconv ${CMAKE_CURRENT_LIST_DIR}/charmap.txt
             ${out_path}.preprocessed
             ${out_path}
-            #${TARGET_FILE}
-        #BYPRODUCTS ${CMAKE_CURRENT_BINARY_DIR}/${out_path}
-        #MAIN_DEPENDENCY ${CMAKE_CURRENT_LIST_DIR}/${TEXT_SRC}
-        #WORKING_DIRECTORY ${text_dir}
     )
-    #get_target_property(TARGET_SOURCE_DIR ${file_out} SOURCE_DIR)
-    #message("TARGET_SOURCE_DIR: ${TARGET_SOURCE_DIR}")
-    
 endforeach()
-
-#add_library(define_text OBJECT ${CMAKE_CURRENT_BINARY_DIR}/${out_path})
+add_custom_target(localized_text DEPENDS
+    define_courses.inc.c
+    define_text.inc.c
+)
 
 ####################
 # Preprocess Levels
@@ -138,22 +131,22 @@ set(LEVEL_SRC
 cmake_path(GET LEVEL_SRC PARENT_PATH file_dir)
 cmake_path(GET LEVEL_SRC STEM LAST_ONLY file_out)
 add_custom_command(TARGET PRE-${TARGET_NAME}
-        PRE_BUILD
-        COMMENT "Generating include/${file_out}"
-        COMMAND mkdir -p ${BUILD_DIR}/include
-        #COMMAND ${CMAKE_C_PREPROCESSOR} -I ${CMAKE_CURRENT_LIST_DIR}
-        COMMAND clang -E -P -x c -Wno-trigraphs
-        -I${CMAKE_CURRENT_LIST_DIR}/include
-        -I${BUILD_DIR}
-        -I${BUILD_DIR}/include
-        -I${CMAKE_CURRENT_LIST_DIR}/src
-        -I${CMAKE_CURRENT_LIST_DIR}
-        -I${CMAKE_CURRENT_LIST_DIR}/include/libc
-        -DVERSION_US=1 -DF3D_OLD=1
-        ${CMAKE_CURRENT_LIST_DIR}/${LEVEL_SRC} | sed -E 's|\(.+\)|\#include \"\\1\"|' > ${BUILD_DIR}/include/${file_out}
-        BYPRODUCTS ${BUILD_DIR}/${file_out}
-        MAIN_DEPENDENCY ${CMAKE_CURRENT_LIST_DIR}/${LEVEL_SRC}
-    )
+    PRE_BUILD
+    COMMENT "Generating include/${file_out}"
+    COMMAND mkdir -p ${BUILD_DIR}/include
+    #COMMAND ${CMAKE_C_PREPROCESSOR} -I ${CMAKE_CURRENT_LIST_DIR}
+    COMMAND clang -E -P -x c -Wno-trigraphs
+    -I${CMAKE_CURRENT_LIST_DIR}/include
+    -I${BUILD_DIR}
+    -I${BUILD_DIR}/include
+    -I${CMAKE_CURRENT_LIST_DIR}/src
+    -I${CMAKE_CURRENT_LIST_DIR}
+    -I${CMAKE_CURRENT_LIST_DIR}/include/libc
+    -DVERSION_US=1 -DF3D_OLD=1
+    ${CMAKE_CURRENT_LIST_DIR}/${LEVEL_SRC} | sed -E 's|\(.+\)|\#include \"\\1\"|' > ${BUILD_DIR}/include/${file_out}
+    BYPRODUCTS ${BUILD_DIR}/${file_out}
+    MAIN_DEPENDENCY ${CMAKE_CURRENT_LIST_DIR}/${LEVEL_SRC}
+)
 
 ########################
 # generate text headers
@@ -493,7 +486,7 @@ add_executable(${TARGET_NAME}
     ${C_SRCS}
     ${CPP_SRCS}
 )
-add_dependencies(${TARGET_NAME} PRE-${TARGET_NAME})
+add_dependencies(${TARGET_NAME} localized_text) #PRE-${TARGET_NAME})
 
 set_target_properties(${TARGET_NAME} PROPERTIES
     OUTPUT_NAME "${TARGET_NAME}"
