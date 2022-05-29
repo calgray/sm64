@@ -367,6 +367,7 @@ foreach(SKY_SRC ${SKY_SRCS})
         # ${CMAKE_CURRENT_BINARY_DIR}/${BUILD_DIR} # textures
         # ${CMAKE_CURRENT_BINARY_DIR}/${BUILD_DIR}/include # text
     )
+    # TODO: use yaml extraction
     target_link_options(${file_out}_skybox PRIVATE
         -Wl,-e,0,-Ttext=0x0A000000,-Map,${sky_target_dir}/${out_dir}/${file_out}_skybox.elf.map
     )
@@ -401,6 +402,7 @@ foreach(SKY_SRC ${SKY_SRCS})
             ${build_in_path}
             ${build_out_path}
         BYPRODUCTS ${full_out_path}
+        MAIN_DEPENDENCY ${CMAKE_CURRENT_BINARY_DIR}/${build_in_path}
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     )
     # Converting MIO0 to ELF
@@ -415,6 +417,7 @@ foreach(SKY_SRC ${SKY_SRCS})
             ${build_in_path} 
             -o ${build_out_path}
         BYPRODUCTS ${full_out_path}
+        MAIN_DEPENDENCY ${CMAKE_CURRENT_BINARY_DIR}/${build_in_path}
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     )
 
@@ -671,8 +674,8 @@ target_include_directories(${TARGET_NAME} PUBLIC
     ${CMAKE_SOURCE_DIR}/projects/nucpp/include
     
     # prebuild sources
-    ${CMAKE_CURRENT_BINARY_DIR}/${BUILD_DIR} # textures
-    ${CMAKE_CURRENT_BINARY_DIR}/${BUILD_DIR}/include # text
+    ${CMAKE_CURRENT_BINARY_DIR}/${textures_target_dir}/${LOCALE} # textures
+    ${CMAKE_CURRENT_BINARY_DIR}/${text_target_dir}/${LOCALE}/include # text
 )
 target_compile_definitions(${TARGET_NAME} PUBLIC 
     #_FINALROM=1
