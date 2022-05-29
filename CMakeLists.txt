@@ -107,8 +107,9 @@ foreach(TEXT_SRC ${TEXT_SRCS})
             -o ${full_out_path}.preprocessed
             ${CMAKE_CURRENT_LIST_DIR}/${TEXT_SRC}
     )
-    add_custom_target(${file_out}
-        SOURCES ${full_out_path}.preprocessed
+    add_custom_command(
+        OUTPUT ${full_out_path}
+        MAIN_DEPENDENCY ${full_out_path}.preprocessed
         BYPRODUCTS ${full_out_path}
         COMMENT "Generating ${build_out_path}"
         COMMAND
@@ -116,7 +117,7 @@ foreach(TEXT_SRC ${TEXT_SRCS})
             ${full_out_path}.preprocessed
             ${full_out_path}
     )
-    add_dependencies(localized_text ${file_out})
+    target_sources(localized_text PRIVATE ${full_out_path})
 endforeach()
 
 ##################################
@@ -187,6 +188,8 @@ target_sources(levels PRIVATE ${full_out_path})
 # generate images
 ##################
 
+add_custom_target(textures)
+set(textures_target_dir "CMakeFiles/_textures.dir")
 set(TEXTURE_ENCODING u8)
 file(GLOB_RECURSE IMAGE_SRCS RELATIVE ${CMAKE_CURRENT_LIST_DIR}
     textures/*.rgba32.png
@@ -221,37 +224,37 @@ foreach(IMAGE_SRC ${IMAGE_SRCS})
     string(REGEX MATCHALL "\\.[^.]*" file_exts ${file_ext})
     list(REVERSE file_exts)
     list(GET file_exts 1 file_type)
-    string(REGEX MATCH "[^.]*$" file_type ${file_type})
-    add_custom_command(TARGET PRE-${TARGET_NAME}
-        #OUTPUT ${BUILD_DIR}/${file_out}.inc.c
-        PRE_BUILD
-        COMMENT "Generating ${file_type} src ${file_dir}/${file_out}.inc.c"
-        COMMAND mkdir -p ${BUILD_DIR}/${file_dir}
+    string(REGEX MATCH "[^.]*$" file_type ${file_type}) # e.g. rgba16
+    # Use raw for fonts
+    if(file_type STREQUAL "ia1")
+        set(scheme raw)
+        set(out_ext "")
+    else()
+        set(scheme ${TEXTURE_ENCODING})
+        set(out_ext .inc.c)
+    endif()
+    
+    set(out_dir ${LOCALE}/${file_dir})
+    set(out_path ${out_dir}/${file_out}${out_ext}) # e.g. us/textures/cave/hmc_textures.00000.rgba16.inc.c
+    set(build_out_path ${textures_target_dir}/${out_path})
+    set(full_out_path ${CMAKE_CURRENT_BINARY_DIR}/${build_out_path})
+    add_custom_command(
+        OUTPUT ${full_out_path}
+        COMMENT "Generating ${build_out_path}"
+        COMMAND mkdir -p ${textures_target_dir}/${out_dir}
         COMMAND
-        ${TOOLS_DIR}/n64graphics -s ${TEXTURE_ENCODING}
-        -i ${BUILD_DIR}/${file_dir}/${file_out}.inc.c
+        ${TOOLS_DIR}/n64graphics
+        -s ${scheme}
+        -i ${build_out_path}
         -g ${CMAKE_CURRENT_LIST_DIR}/${IMAGE_SRC}
         -f ${file_type}
-        BYPRODUCTS ${BUILD_DIR}/${file_out}.inc.c
+        BYPRODUCTS ${full_out_path}
         MAIN_DEPENDENCY ${CMAKE_CURRENT_LIST_DIR}/${IMAGE_SRC}
     )
-    add_custom_command(TARGET PRE-${TARGET_NAME}
-        #OUTPUT ${BUILD_DIR}/${file_out}
-        PRE_BUILD
-        COMMENT "Generating raw ${file_dir}/${file_out}"
-        COMMAND mkdir -p ${BUILD_DIR}/${file_dir}
-        COMMAND
-        ${TOOLS_DIR}/n64graphics -s raw
-        -i ${BUILD_DIR}/${file_dir}/${file_out}
-        -g ${CMAKE_CURRENT_LIST_DIR}/${IMAGE_SRC}
-        -f ${file_type}
-        BYPRODUCTS ${BUILD_DIR}/${file_out}
-        MAIN_DEPENDENCY ${CMAKE_CURRENT_LIST_DIR}/${IMAGE_SRC}
-    )
+    target_sources(textures PRIVATE ${full_out_path})
 endforeach()
 
 # generate image color indexes
-
 
 # add_library(images OBJECT
 #     ${IMAGE_SRCS}
@@ -262,54 +265,72 @@ endforeach()
 ######################
 # generate sky images
 ######################
-add_custom_command(TARGET PRE-${TARGET_NAME}
-    PRE_BUILD
-    COMMENT "Generating ${BUILD_DIR}/levels/ending/cake.inc.c"
-    COMMAND ${TOOLS_DIR}/skyconv --type cake --split ${CMAKE_CURRENT_LIST_DIR}/levels/ending/cake.png ${BUILD_DIR}/levels/ending
+add_custom_target(sky)
+set(sky_target_dir "CMakeFiles/_sky.dir")
+
+# Cake
+set(CAKE_SRC levels/ending/cake.png)
+set(out_dir ${LOCALE}/levels/ending)
+set(out_path ${out_dir}/cake.inc.c)
+set(build_out_path ${sky_target_dir}/${out_path})
+set(full_out_path ${CMAKE_CURRENT_BINARY_DIR}/${build_out_path})
+add_custom_command(
+    OUTPUT ${full_out_path}
+    COMMENT "Generating ${sky_target_dir}/${out_path}"
+    COMMAND mkdir -p ${sky_target_dir}/${out_dir}
+    COMMAND ${TOOLS_DIR}/skyconv
+    --type cake
+    --split ${CMAKE_CURRENT_LIST_DIR}/${CAKE_SRC}
+    ${sky_target_dir}/${out_dir}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
-add_custom_command(TARGET PRE-${TARGET_NAME}
-    PRE_BUILD
-    COMMENT "Generating ${BUILD_DIR}/bin/water_skybox.c"
-    COMMAND ${TOOLS_DIR}/skyconv --type sky --split ${CMAKE_CURRENT_LIST_DIR}/textures/skyboxes/water.png ${BUILD_DIR}/bin
+target_sources(sky PRIVATE ${full_out_path})
+
+set(SKY_SRCS
+    textures/skyboxes/bbh.png
+    textures/skyboxes/bidw.png
+    textures/skyboxes/bitfs.png
+    textures/skyboxes/bits.png
+    textures/skyboxes/ccm.png
+    textures/skyboxes/cloud_floor.png
+    textures/skyboxes/clouds.png
+    textures/skyboxes/ssl.png
+    textures/skyboxes/water.png
+    textures/skyboxes/wdw.png
 )
 
-#####################
-# Generate sounds
-#####################
-
-############################################
-# Generate Level Compressed ELF Load Points
-############################################
-file(GLOB_RECURSE LEVEL_SRCS RELATIVE ${CMAKE_CURRENT_LIST_DIR}
-    levels/*leveldata.c
-)
-foreach(LEVEL_SRC ${LEVEL_SRCS})
-    cmake_path(GET LEVEL_SRC PARENT_PATH level_dir)
-    cmake_path(GET LEVEL_SRC STEM level_name)
-    string(REGEX REPLACE "/" "." level_target ${LEVEL_SRC})
-    message("level_target ${level_target}")
-
-    # TODO: requires textures first
-    add_executable(${level_target}
-        ${LEVEL_SRC}
+foreach(SKY_SRC ${SKY_SRCS})
+    cmake_path(GET SKY_SRC PARENT_PATH file_dir)
+    cmake_path(GET SKY_SRC STEM LAST_ONLY file_out)
+    set(out_dir ${LOCALE}/bin)
+    #Split
+    set(out_path ${out_dir}/${file_out}_skybox.c)
+    set(build_out_path ${sky_target_dir}/${out_path})
+    set(full_out_path ${CMAKE_CURRENT_BINARY_DIR}/${build_out_path})
+    add_custom_command(
+        OUTPUT ${full_out_path}
+        COMMENT "Splitting ${SKY_SRC} -> ${sky_target_dir}/${out_path}"
+        COMMAND mkdir -p ${sky_target_dir}/${out_dir}
+        COMMAND ${TOOLS_DIR}/skyconv
+        --type sky
+        --split ${CMAKE_CURRENT_LIST_DIR}/${SKY_SRC}
+        ${sky_target_dir}/${out_dir}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     )
-    set_target_properties(${level_target} PROPERTIES
+
+    # Compile and linking to ELF
+    add_executable(${file_out}_skybox
+        ${full_out_path}
+    )
+    set_target_properties(${file_out}_skybox PROPERTIES
         PREFIX ""
-        OUTPUT_NAME ${level_name}
+        OUTPUT_NAME ${file_out}_skybox
         SUFFIX ".elf"
-        ARCHIVE_OUTPUT_DIRECTORY ${BUILD_DIR}/${level_dir}
-        LIBRARY_OUTPUT_DIRECTORY ${BUILD_DIR}/${level_dir}
-        RUNTIME_OUTPUT_DIRECTORY ${BUILD_DIR}/${level_dir}
+        ARCHIVE_OUTPUT_DIRECTORY ${sky_target_dir}/${out_dir}
+        LIBRARY_OUTPUT_DIRECTORY ${sky_target_dir}/${out_dir}
+        RUNTIME_OUTPUT_DIRECTORY ${sky_target_dir}/${out_dir}
     )
-    target_compile_definitions(${level_target} PRIVATE
-        TARGET_N64=1
-        _LANGUAGE_C=1
-        VERSION_US=1
-        DF3D_OLD=1
-        NON_MATCHING=1
-        AVOID_UB=1
-    )
-    target_compile_options(${level_target} PRIVATE
+    target_compile_options(${file_out}_skybox PRIVATE
         -nostdinc
         -mips3
         -mno-shared
@@ -327,51 +348,179 @@ foreach(LEVEL_SRC ${LEVEL_SRCS})
         -Wall
         -Wextra
     )
-    target_include_directories(${level_target} PRIVATE
+    target_compile_definitions(${file_out}_skybox PRIVATE
+        TARGET_N64=1
+        _LANGUAGE_C=1
+        VERSION_US=1
+        F3D_OLD=1
+        NON_MATCHING=1
+        AVOID_UB=1
+    )
+    target_include_directories(${file_out}_skybox PRIVATE
+        #.
         include
-        ${CMAKE_CURRENT_BINARY_DIR}/${BUILD_DIR}
-        ${CMAKE_CURRENT_BINARY_DIR}/${BUILD_DIR}/include
         include/libc
-        src
-        .
+        #build/us
+        #build/us/include
+        #src
+        # prebuild sources
+        # ${CMAKE_CURRENT_BINARY_DIR}/${BUILD_DIR} # textures
+        # ${CMAKE_CURRENT_BINARY_DIR}/${BUILD_DIR}/include # text
     )
-    target_link_libraries(${level_target} PRIVATE n64)
-    execute_process(
-        COMMAND yq -r ".\"texture-bin\"" ${CMAKE_CURRENT_LIST_DIR}/${level_dir}/level.yaml
-        OUTPUT_VARIABLE level_texture
-        OUTPUT_STRIP_TRAILING_WHITESPACE
+    target_link_options(${file_out}_skybox PRIVATE
+        -Wl,-e,0,-Ttext=0x0A000000,-Map,${sky_target_dir}/${out_dir}/${file_out}_skybox.elf.map
     )
-    target_link_options(${level_target} PUBLIC
-        # Map file currently not used
-        -Wl,-e,0,-Ttext=0x09000000,-Map,${level_target}.elf.map,--just-symbols=${level_texture}.elf
+
+    # Extracting Compressible Data
+    set(build_in_path ${sky_target_dir}/${out_dir}/${file_out}_skybox.elf)
+    set(out_path ${out_dir}/${file_out}_skybox.bin)
+    set(build_out_path ${sky_target_dir}/${out_path})
+    set(full_out_path ${CMAKE_CURRENT_BINARY_DIR}/${build_out_path})
+    add_custom_command(TARGET ${file_out}_skybox POST_BUILD
+        #OUTPUT ${full_out_path}
+        COMMENT "Extracting Compressible data to ${sky_target_dir}/${out_path}"
+        COMMAND
+            ${CMAKE_OBJCOPY}
+            -O binary
+            --only-section=.data
+            ${build_in_path}
+            ${build_out_path}
+        BYPRODUCTS ${full_out_path}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     )
-    # extract compressible data
-    add_custom_command(TARGET ${level_target}
-        POST_BUILD
-        COMMENT "Extracting to ${level_name}.bin"
-        COMMAND ${CMAKE_OBJCOPY} -O binary --only-section=.data
-        # TODO: output to BUILD_DIR
-        ${BUILD_DIR}/${level_dir}/${level_name}.elf
-        ${BUILD_DIR}/${level_dir}/${level_name}.bin
+    message("full_out_path:${full_out_path}")
+    # Compressing
+    set(build_in_path ${sky_target_dir}/${out_dir}/${file_out}_skybox.bin)
+    set(out_path ${out_dir}/${file_out}_skybox.mio0)
+    set(build_out_path ${sky_target_dir}/${out_path})
+    set(full_out_path ${CMAKE_CURRENT_BINARY_DIR}/${build_out_path})
+    add_custom_command(TARGET ${file_out}_skybox POST_BUILD
+        COMMENT "Compressing to ${sky_target_dir}/${out_path}"
+        COMMAND
+            ${TOOLS_DIR}/mio0
+            ${build_in_path}
+            ${build_out_path}
+        BYPRODUCTS ${full_out_path}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     )
-    # compress
-    add_custom_command(TARGET ${level_target}
-        POST_BUILD
-        COMMENT "Compressing to ${level_name}.mio0"
-        COMMAND ${TOOLS_DIR}/mio0
-        ${BUILD_DIR}/${level_dir}/${level_name}.bin
-        ${BUILD_DIR}/${level_dir}/${level_name}.mio0
+    # Converting MIO0 to ELF
+    set(build_in_path ${sky_target_dir}/${out_dir}/${file_out}_skybox.mio0)
+    set(out_path ${out_dir}/${file_out}_skybox.mio0.o)
+    set(build_out_path ${sky_target_dir}/${out_path})
+    set(full_out_path ${CMAKE_CURRENT_BINARY_DIR}/${build_out_path})
+    add_custom_command(TARGET ${file_out}_skybox POST_BUILD
+        COMMENT "Compressing to ${sky_target_dir}/${out_path}"
+        COMMAND
+            mips64-elf-ld -r -b binary
+            ${build_in_path} 
+            -o ${build_out_path}
+        BYPRODUCTS ${full_out_path}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     )
-    # convert MIO00 to ELF.o
-    add_custom_command(TARGET ${level_target}
-        POST_BUILD
-        COMMENT "Converting to ELF ${level_name}.mio0.o"
-        COMMAND mips64-elf-ld -r -b binary
-        ${BUILD_DIR}/${level_dir}/${level_name}.mio0
-        -o ${BUILD_DIR}/${level_dir}/${level_name}.mio0.o
-    )
-    add_dependencies(PRE-${TARGET_NAME} ${level_target})
+
+    #target_sources(sky PRIVATE ${full_out_path})
+    add_dependencies(sky ${file_out}_skybox)
 endforeach()
+
+#####################
+# Generate sounds
+#####################
+
+############################################
+# Generate Level Compressed ELF Load Points
+############################################
+# file(GLOB_RECURSE LEVEL_SRCS RELATIVE ${CMAKE_CURRENT_LIST_DIR}
+#     levels/*leveldata.c
+# )
+# foreach(LEVEL_SRC ${LEVEL_SRCS})
+#     cmake_path(GET LEVEL_SRC PARENT_PATH level_dir)
+#     cmake_path(GET LEVEL_SRC STEM level_name)
+#     string(REGEX REPLACE "/" "." level_target ${LEVEL_SRC})
+#     message("level_target ${level_target}")
+
+#     # TODO: requires textures first
+#     add_executable(${level_target}
+#         ${LEVEL_SRC}
+#     )
+#     set_target_properties(${level_target} PROPERTIES
+#         PREFIX ""
+#         OUTPUT_NAME ${level_name}
+#         SUFFIX ".elf"
+#         ARCHIVE_OUTPUT_DIRECTORY ${BUILD_DIR}/${level_dir}
+#         LIBRARY_OUTPUT_DIRECTORY ${BUILD_DIR}/${level_dir}
+#         RUNTIME_OUTPUT_DIRECTORY ${BUILD_DIR}/${level_dir}
+#     )
+#     target_compile_definitions(${level_target} PRIVATE
+#         TARGET_N64=1
+#         _LANGUAGE_C=1
+#         VERSION_US=1
+#         DF3D_OLD=1
+#         NON_MATCHING=1
+#         AVOID_UB=1
+#     )
+#     target_compile_options(${level_target} PRIVATE
+#         -nostdinc
+#         -mips3
+#         -mno-shared
+#         -mhard-float
+#         -mdivide-breaks
+#         -fno-stack-protector
+#         -fno-common
+#         -fno-zero-initialized-in-bss
+#         -fno-PIC
+#         -mno-abicalls
+#         -fno-strict-aliasing
+#         -fno-inline-functions
+#         -ffreestanding
+#         -fwrapv
+#         -Wall
+#         -Wextra
+#     )
+#     target_include_directories(${level_target} PRIVATE
+#         include
+#         ${CMAKE_CURRENT_BINARY_DIR}/${BUILD_DIR}
+#         ${CMAKE_CURRENT_BINARY_DIR}/${BUILD_DIR}/include
+#         include/libc
+#         src
+#         .
+#     )
+#     target_link_libraries(${level_target} PRIVATE n64)
+#     execute_process(
+#         COMMAND yq -r ".\"texture-bin\"" ${CMAKE_CURRENT_LIST_DIR}/${level_dir}/level.yaml
+#         OUTPUT_VARIABLE level_texture
+#         OUTPUT_STRIP_TRAILING_WHITESPACE
+#     )
+#     target_link_options(${level_target} PUBLIC
+#         # Map file currently not used
+#         -Wl,-e,0,-Ttext=0x09000000,-Map,${level_target}.elf.map,--just-symbols=${level_texture}.elf
+#     )
+#     # extract compressible data
+#     add_custom_command(TARGET ${level_target}
+#         POST_BUILD
+#         COMMENT "Extracting to ${level_name}.bin"
+#         COMMAND ${CMAKE_OBJCOPY} -O binary --only-section=.data
+#         # TODO: output to BUILD_DIR
+#         ${BUILD_DIR}/${level_dir}/${level_name}.elf
+#         ${BUILD_DIR}/${level_dir}/${level_name}.bin
+#     )
+#     # compress
+#     add_custom_command(TARGET ${level_target}
+#         POST_BUILD
+#         COMMENT "Compressing to ${level_name}.mio0"
+#         COMMAND ${TOOLS_DIR}/mio0
+#         ${BUILD_DIR}/${level_dir}/${level_name}.bin
+#         ${BUILD_DIR}/${level_dir}/${level_name}.mio0
+#     )
+#     # convert MIO00 to ELF.o
+#     add_custom_command(TARGET ${level_target}
+#         POST_BUILD
+#         COMMENT "Converting to ELF ${level_name}.mio0.o"
+#         COMMAND mips64-elf-ld -r -b binary
+#         ${BUILD_DIR}/${level_dir}/${level_name}.mio0
+#         -o ${BUILD_DIR}/${level_dir}/${level_name}.mio0.o
+#     )
+#     add_dependencies(PRE-${TARGET_NAME} ${level_target})
+# endforeach()
 
 
 ############################################
@@ -500,7 +649,10 @@ add_executable(${TARGET_NAME}
 add_dependencies(${TARGET_NAME}
     localized_text
     levels
-) #PRE-${TARGET_NAME})
+    textures
+    sky
+)
+#PRE-${TARGET_NAME})
 
 set_target_properties(${TARGET_NAME} PROPERTIES
     OUTPUT_NAME "${TARGET_NAME}"
