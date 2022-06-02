@@ -518,12 +518,14 @@ add_custom_command(
         -Iinclude #-Isrc #-I. #-Iinclude/libc
         -DVERSION_US=1 -DF3D_OLD=1 -DNON_MATCHING=1 -DAVOID_UB=1
         sound/sequences/00_sound_player.s
-        | ${CMAKE_ASM_COMPILER}
+        | ${CMAKE_C_COMPILER}
         -march=vr4300 -mabi=32
         -Iinclude -Ibuild/us -Ibuild/us/include -Isrc -I. -Iinclude/libc
-        --defsym VERSION_US=1 --defsym F3D_OLD=1 --defsym NON_MATCHING=1 --defsym AVOID_UB=1
-        -MD ${sound_data_dir}/sequences/00_sound_player.d
+        -DVERSION_US=1 -DF3D_OLD=1 -DNON_MATCHING=1 -DAVOID_UB=1
+        -x assembler-with-cpp
+        -MMD -MF ${sound_data_dir}/sequences/00_sound_player.d
         -o ${sound_data_dir}/sequences/00_sound_player.o
+        -
     WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
 )
 add_custom_command(
@@ -540,7 +542,7 @@ add_custom_command(
 # generate sequences.bin
 file(GLOB_RECURSE SOUND_SEQUENCES RELATIVE ${CMAKE_CURRENT_LIST_DIR} sound/sequences/${LOCALE}/*.m64)
 add_custom_command(
-    OUTPUT ${sound_data_dir}/sequences.bin
+    OUTPUT ${sound_data_dir}/sequences.bin ${sound_data_dir}/bank_sets
     MAIN_DEPENDENCY ${sound_data_dir}/sequences/00_sound_player.m64
     COMMAND
         python ${TOOLS_DIR}/assemble_sound.py
@@ -555,11 +557,27 @@ add_custom_command(
         -DF3D_OLD=1
         -DNON_MATCHING=1
         -DAVOID_UB=1
-        $$\(cat ${sound_target_dir}/${LOCALE}/${sound_flags_target}\)
+        $$\(cat ${CMAKE_CURRENT_BINARY_DIR}/${sound_target_dir}/${LOCALE}/${sound_flags_target}.txt\)
     WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
 )
-target_sources(sound PRIVATE ${sound_data_dir}/sequences.bin)
 
+# generate BIN inc.c
+add_custom_command(
+    OUTPUT ${sound_data_dir}/sequences.bin.inc.c
+    MAIN_DEPENDENCY ${sound_data_dir}/sequences.bin
+    COMMAND
+    hexdump -v -e '1/1 \"0x%X,\"' ${sound_data_dir}/sequences.bin > ${sound_data_dir}/sequences.bin.inc.c
+)
+target_sources(sound PRIVATE ${sound_data_dir}/sequences.bin.inc.c)
+
+# generate bank_sets inc.c
+add_custom_command(
+    OUTPUT ${sound_data_dir}/bank_sets.inc.c
+    MAIN_DEPENDENCY ${sound_data_dir}/bank_sets
+    COMMAND
+    hexdump -v -e '1/1 \"0x%X,\"' ${sound_data_dir}/bank_sets > ${sound_data_dir}/bank_sets.inc.c
+)
+target_sources(sound PRIVATE ${sound_data_dir}/bank_sets.inc.c)
 
 ######################
 # Generate animations
@@ -949,7 +967,7 @@ set_target_properties(${TARGET_NAME} PROPERTIES
     OUTPUT_NAME "${TARGET_NAME}"
     SUFFIX ".elf"
 )
-target_link_libraries(${TARGET_NAME} n64)
+target_link_libraries(${TARGET_NAME} PRIVATE n64)
 target_include_directories(${TARGET_NAME} PRIVATE .)
 target_include_directories(${TARGET_NAME} PUBLIC
     include
@@ -968,6 +986,7 @@ target_include_directories(${TARGET_NAME} PUBLIC
     # preprocessed sources
     ${CMAKE_CURRENT_BINARY_DIR}/${textures_target_dir}/${LOCALE} # textures
     ${CMAKE_CURRENT_BINARY_DIR}/${sky_target_dir}/${LOCALE} # sky+cake
+    ${CMAKE_CURRENT_BINARY_DIR}/${sound_target_dir}/${LOCALE} # sound
     ${CMAKE_CURRENT_BINARY_DIR}/${rsp_target_dir}/${LOCALE} # rsp
     ${CMAKE_CURRENT_BINARY_DIR}/${common_target_dir}/${LOCALE} # common
 )
@@ -1062,7 +1081,7 @@ target_link_directories(${TARGET_NAME}
     ${N64SDK_DIR}
 )
 # order specific
-target_link_libraries(${TARGET_NAME}
+target_link_libraries(${TARGET_NAME} PRIVATE
     #n64sdkmod::nualstl
     #n64sdkmod::mus
     #n64sdkmod::nualstl_n
@@ -1074,7 +1093,8 @@ target_link_libraries(${TARGET_NAME}
     #n64sdkmod::nusys
     # n64sdkmod::nusys_d
     # n64sdkmod::n_audio
-    n64sdkmod::ultra_rom
+    
+    #n64sdkmod::ultra_rom # TODO: remove -isystem
     gcc
 )
 
