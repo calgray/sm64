@@ -8,6 +8,7 @@ shared-path: ["/areas/2/", "/areas/1/"]
 # loaded files
 skybox-bin: water
 texture-bin: grass
+texture-address: 0x09000000
 effects: false
 actor-bins: [group11, group14]
 common-bin: [common0]
