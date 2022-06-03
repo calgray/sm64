@@ -4,7 +4,7 @@ set(LD_SCRIPT sm64.ld)
 # replace /usr with N64SDK_DIR in .ld
 
 # build ROM
-#set( BIN_NAME             ${TARGET_NAME}.bin )
+set( BIN_NAME             ${TARGET_NAME}.bin )
 set( ROM_NAME             ${TARGET_NAME}.z64 )
 set( VERSION              us )
 set( LOCALE               us )
@@ -26,14 +26,19 @@ add_custom_target(PRE-${TARGET_NAME})
 #file(GLOB_RECURSE SOUND_SRCS RELATIVE ${CMAKE_CURRENT_LIST_DIR} sound/*.c)
 file(GLOB_RECURSE ASM_SRCS RELATIVE ${CMAKE_CURRENT_LIST_DIR}
     asm/*.s
-    lib/*.s
-    assets/*.s
+    lib/rsp.s
+    #assets/*.s
 )
-
 file(GLOB_RECURSE C_SRCS RELATIVE ${CMAKE_CURRENT_LIST_DIR}
-    src/*.c
+    src/engine/*.c
+    src/buffers/*.c
+    src/audio/*.c
+    src/menu/*.c
+    src/game/*.c
     sound/*.c
     levels/*.c
+    #actors/common0.c
+    #actors/common1.c
     actors/*_geo.c
     data/*.c
 )
@@ -304,8 +309,13 @@ foreach(SKY_SRC ${SKY_SRCS})
     )
 
     # Compile and linking to ELF
+
+    set(build_in_path ${full_out_path})
+    set(out_path ${out_dir}/${file_out}_skybox.elf)
+    set(build_out_path ${common_target_dir}/${out_path})
+    set(full_out_path ${CMAKE_CURRENT_BINARY_DIR}/${build_out_path})
     add_executable(${file_out}_skybox
-        ${full_out_path}
+        ${build_in_path}
     )
     set_target_properties(${file_out}_skybox PROPERTIES
         PREFIX ""
@@ -355,6 +365,7 @@ foreach(SKY_SRC ${SKY_SRCS})
     target_link_options(${file_out}_skybox PRIVATE
         -Wl,-e,0,-Ttext=0x0A000000,-Map,${sky_target_dir}/${out_dir}/${file_out}_skybox.elf.map
     )
+    list(APPEND SEG_FILES ${full_out_path})
 
     # Extracting Compressible Data
     set(build_in_path ${sky_target_dir}/${out_dir}/${file_out}_skybox.elf)
@@ -628,7 +639,7 @@ target_compile_definitions(${animation_target} PRIVATE
     TARGET_N64=1
     _LANGUAGE_C=1
     VERSION_US=1
-    DF3D_OLD=1
+    F3D_OLD=1
     NON_MATCHING=1
     AVOID_UB=1
 )
@@ -731,7 +742,7 @@ file(GLOB_RECURSE COMMON_SRCS RELATIVE ${CMAKE_CURRENT_LIST_DIR}
 )
 
 #exclude actors model.inc.c
-#list(FILTER COMMON_SRCS EXCLUDE REGEX .inc.c)
+list(FILTER COMMON_SRCS EXCLUDE REGEX .inc.c)
 list(FILTER COMMON_SRCS EXCLUDE REGEX /eu/)
 
 foreach(COMMON_SRC ${COMMON_SRCS})
@@ -762,7 +773,7 @@ foreach(COMMON_SRC ${COMMON_SRCS})
         TARGET_N64=1
         _LANGUAGE_C=1
         VERSION_US=1
-        DF3D_OLD=1
+        F3D_OLD=1
         NON_MATCHING=1
         AVOID_UB=1
     )
@@ -796,6 +807,8 @@ foreach(COMMON_SRC ${COMMON_SRCS})
     target_link_options(${bin_target} PUBLIC
         -Wl,-e,0,-Ttext=0x09000000,-Map,${full_out_path}.map
     )
+    list(APPEND SEG_FILES ${full_out_path})
+    
     # extract compressible data
     add_custom_command(TARGET ${bin_target}
         POST_BUILD
@@ -866,7 +879,7 @@ foreach(LEVEL_SRC ${LEVEL_SRCS})
         TARGET_N64=1
         _LANGUAGE_C=1
         VERSION_US=1
-        DF3D_OLD=1
+        F3D_OLD=1
         NON_MATCHING=1
         AVOID_UB=1
     )
@@ -914,6 +927,8 @@ foreach(LEVEL_SRC ${LEVEL_SRCS})
         -Wl,-e,0,-Ttext=${texture_address},-Map,${level_target}.elf.map,--just-symbols=${common_target_dir}/${LOCALE}/bin/${texture_bin}.elf
     )
     endif()
+    list(APPEND SEG_FILES ${full_out_path})
+
     # extract compressible data
     add_custom_command(TARGET ${level_target}
         POST_BUILD
@@ -968,6 +983,7 @@ set_target_properties(${TARGET_NAME} PROPERTIES
     SUFFIX ".elf"
 )
 target_link_libraries(${TARGET_NAME} PRIVATE n64)
+
 target_include_directories(${TARGET_NAME} PRIVATE .)
 target_include_directories(${TARGET_NAME} PUBLIC
     include
@@ -994,30 +1010,38 @@ target_compile_definitions(${TARGET_NAME} PUBLIC
     #_FINALROM=1
     #F3DEX_GBI_2=1
     #N_AUDIO=1
-    MAXWIDTH=320
-    MAXHEIGHT=240
-    _FORTIFY_SOURCE=2
+    # MAXWIDTH=320
+    # MAXHEIGHT=240
+    # _FORTIFY_SOURCE=2
+    # NON_MATCHING=1
+    # AVOID_UB=1
+    # VERSION_US=1
+
+
+    TARGET_N64=1
+    _LANGUAGE_C=1
+    VERSION_US=1
+    F3D_OLD=1
     NON_MATCHING=1
     AVOID_UB=1
-    VERSION_US=1
 )
 
 
 ###################
 # build boot object
 ###################
-add_custom_command(TARGET ${TARGET_NAME}
-    PRE_BUILD
-    COMMAND ${CMAKE_OBJCOPY}
-    -I binary
-    -B mips
-    -O elf32-bigmips
-    ${BOOT_SRC}
-    ${BUILD_DIR}/${BOOT_OBJ}
-    COMMENT "generating boot object ${BUILD_DIR}/${BOOT_OBJ}"
-    MAIN_DEPENDENCY ${BOOT_SRC}
-    BYPRODUCTS ${BUILD_DIR}/${BOOT_OBJ}
-)
+# add_custom_command(TARGET ${TARGET_NAME}
+#     PRE_BUILD
+#     COMMAND ${CMAKE_OBJCOPY}
+#     -I binary
+#     -B mips
+#     -O elf32-bigmips
+#     ${BOOT_SRC}
+#     ${BUILD_DIR}/${BOOT_OBJ}
+#     COMMENT "generating boot object ${BUILD_DIR}/${BOOT_OBJ}"
+#     MAIN_DEPENDENCY ${BOOT_SRC}
+#     BYPRODUCTS ${BUILD_DIR}/${BOOT_OBJ}
+# )
 
 
 #####################
@@ -1028,6 +1052,7 @@ set(MOD_FLAGS
     -DF3DEX_GBI_2=1
     -DNAUDIO=1
     -DBUILD_DIR=${BUILD_DIR}
+    -DLIB_DIR=../../../../../projects/sm64plus/build/${LOCALE}
     -DSM64_TARGET_DIR=${SM64_TARGET_DIR}
     -DBIN_TARGET_DIR=${bin_target_dir}/${LOCALE}
     -DANIM_TARGET_DIR=${animation_target_dir}/${LOCALE}
@@ -1066,13 +1091,32 @@ add_custom_command(TARGET ${TARGET_NAME}
     BYPRODUCTS ${BUILD_DIR}/${LD_SCRIPT} ${BUILD_DIR}/${LD_SCRIPT}.d
 )
 
+# TODO: library hack!
+add_library(sm64plus::goddard STATIC IMPORTED)
+set_target_properties(sm64plus::goddard
+    PROPERTIES
+    IMPORTED_LOCATION ${CMAKE_CURRENT_LIST_DIR}/build/${LOCALE}/libgoddard.a
+    INTERFACE_INCLUDE_DIRECTORIES ${CMAKE_CURRENT_LIST_DIR}/src/goddard
+)
+
+add_library(sm64plus::ultra STATIC IMPORTED)
+set_target_properties(sm64plus::ultra
+    PROPERTIES
+    IMPORTED_LOCATION ${CMAKE_CURRENT_LIST_DIR}/build/${LOCALE}/libultra.a
+    #INTERFACE_INCLUDE_DIRECTORIES ${CMAKE_CURRENT_LIST_DIR}/include
+)
+
 ###########
 # LINKING
 ###########
+list(TRANSFORM SEG_FILES PREPEND "-R,")
+list(JOIN SEG_FILES , GCC_LDFLAGS)
 target_link_options(${TARGET_NAME}
     PUBLIC
-    ${BUILD_DIR}/${BOOT_OBJ}
-    -Wl,-T,${BUILD_DIR}/${LD_SCRIPT},-Map,${BUILD_DIR}/${TARGET_NAME}.map,--no-check-sections,--gc-sections
+    -L ${BUILD_DIR}
+    #${BUILD_DIR}/${BOOT_OBJ}
+    -T undefined_syms.txt
+    -Wl,-T,${BUILD_DIR}/${LD_SCRIPT},-Map,${BUILD_DIR}/${TARGET_NAME}.map,--no-check-sections,${GCC_LDFLAGS}
 )
 target_link_directories(${TARGET_NAME}
     PUBLIC
@@ -1095,7 +1139,10 @@ target_link_libraries(${TARGET_NAME} PRIVATE
     # n64sdkmod::n_audio
     
     #n64sdkmod::ultra_rom # TODO: remove -isystem
-    gcc
+    sm64plus::goddard
+    sm64plus::ultra
+    # TODO!!! .ld needs to know exact goddard and ultra location
+    #gcc
 )
 
 ######################
@@ -1103,11 +1150,12 @@ target_link_libraries(${TARGET_NAME} PRIVATE
 ######################
 add_custom_command(TARGET ${TARGET_NAME}
     POST_BUILD
-    COMMAND ${CMAKE_OBJCOPY} --pad-to=0x100000 --gap-fill=0xFF $<TARGET_FILE:${TARGET_NAME}> ${ROM_NAME} -O binary
-    COMMAND makemask ${ROM_NAME}
-    COMMAND mips64-elf-size -A -d ${TARGET_NAME}.elf
-    COMMAND stat --format='%n: %s bytes' * | grep ${TARGET_NAME}.elf
-    BYPRODUCTS ${ROM_NAME}
+    COMMAND ${CMAKE_OBJCOPY} --pad-to=0x800000 --gap-fill=0xFF $<TARGET_FILE:${TARGET_NAME}> ${BIN_NAME} -O binary
+    COMMAND ${TOOLS_DIR}/n64cksum ${BIN_NAME} ${ROM_NAME}
+    #COMMAND makemask ${ROM_NAME}
+    #COMMAND mips64-elf-size -A -d ${TARGET_NAME}.elf
+    #COMMAND stat --format='%n: %s bytes' * | grep ${TARGET_NAME}.elf
+    BYPRODUCTS ${ROM_NAME} ${BIN_NAME}
     COMMENT "Generating ${ROM_NAME}"
 )
 

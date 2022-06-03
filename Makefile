@@ -23,7 +23,7 @@ TARGET_N64 ?= 1
 #   ido - uses the SGI IRIS Development Option compiler, which is used to build
 #         an original matching N64 ROM
 #   gcc - uses the GNU C Compiler
-COMPILER ?= ido
+COMPILER ?= gcc
 $(eval $(call validate-option,COMPILER,ido gcc))
 
 
@@ -720,7 +720,7 @@ $(BUILD_DIR)/rsp/%.bin $(BUILD_DIR)/rsp/%_data.bin: rsp/%.s
 # Run linker script through the C preprocessor
 $(BUILD_DIR)/$(LD_SCRIPT): $(LD_SCRIPT)
 	$(call print,Preprocessing linker script:,$<,$@)
-	$(V)$(CPP) $(CPPFLAGS) -DBUILD_DIR=$(BUILD_DIR) -MMD -MP -MT $@ -MF $@.d -o $@ $<
+	$(V)$(CPP) $(CPPFLAGS) -DBUILD_DIR=$(BUILD_DIR) -DLIB_DIR=$(BUILD_DIR) -DANIM_TARGET_DIR=$(BUILD_DIR) -DBIN_TARGET_DIR=$(BUILD_DIR) -MMD -MP -MT $@ -MF $@.d -o $@ $<
 
 # Link libultra
 $(BUILD_DIR)/libultra.a: $(ULTRA_O_FILES)
@@ -734,9 +734,13 @@ $(BUILD_DIR)/libgoddard.a: $(GODDARD_O_FILES)
 	$(V)$(AR) rcs -o $@ $(GODDARD_O_FILES)
 
 # Link SM64 ELF file
+SYMBOL_LINKING_FLAGS := $(addprefix -R ,$(SEG_FILES))
+LDFLAGS := -Map $(BUILD_DIR)/sm64.$(VERSION).map --no-check-sections $(SYMBOL_LINKING_FLAGS)
+COMMA := ,
+GCC_LDFLAGS := -Wl,$(subst $() $(),$(COMMA),$(LDFLAGS))
 $(ELF): $(O_FILES) $(MIO0_OBJ_FILES) $(SEG_FILES) $(BUILD_DIR)/$(LD_SCRIPT) undefined_syms.txt $(BUILD_DIR)/libultra.a $(BUILD_DIR)/libgoddard.a
 	@$(PRINT) "$(GREEN)Linking ELF file:  $(BLUE)$@ $(NO_COL)\n"
-	$(V)$(LD) -L $(BUILD_DIR) -T undefined_syms.txt -T $(BUILD_DIR)/$(LD_SCRIPT) -Map $(BUILD_DIR)/sm64.$(VERSION).map --no-check-sections $(addprefix -R ,$(SEG_FILES)) -o $@ $(O_FILES) -lultra -lgoddard
+	$(V)$(CC) -L $(BUILD_DIR) -T undefined_syms.txt -T $(BUILD_DIR)/$(LD_SCRIPT) $(GCC_LDFLAGS) $(CFLAGS) -o $@ $(O_FILES) -lultra -lgoddard
 
 # Build ROM
 $(ROM): $(ELF)
