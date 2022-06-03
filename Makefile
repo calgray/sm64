@@ -133,6 +133,8 @@ ifeq ($(filter $(TARGET_STRING), sm64.jp.f3d_old sm64.us.f3d_old sm64.eu.f3d_new
   COMPARE := 0
 endif
 
+COMPARE := 1
+
 # Whether to hide commands or not
 VERBOSE ?= 0
 ifeq ($(VERBOSE),0)
@@ -411,7 +413,11 @@ endef
 all: $(ROM)
 ifeq ($(COMPARE),1)
 	@$(PRINT) "$(GREEN)Checking if ROM matches.. $(NO_COL)\n"
+  ifeq ($(COMPILER),ido)
 	@$(SHA1SUM) --quiet -c $(TARGET).sha1 && $(PRINT) "$(TARGET): $(GREEN)OK$(NO_COL)\n" || ($(PRINT) "$(YELLOW)Building the ROM file has succeeded, but does not match the original ROM.\nThis is expected, and not an error, if you are making modifications.\nTo silence this message, use 'make COMPARE=0.' $(NO_COL)\n" && false)
+  else
+	@$(SHA1SUM) --quiet -c $(TARGET).gcc.sha1 && $(PRINT) "$(TARGET): $(GREEN)OK$(NO_COL)\n" || ($(PRINT) "$(YELLOW)Building the ROM file has succeeded, but does not match the original ROM.\nThis is expected, and not an error, if you are making modifications.\nTo silence this message, use 'make COMPARE=0.' $(NO_COL)\n" && false)
+  endif
 endif
 
 clean:
@@ -514,11 +520,15 @@ $(BUILD_DIR)/%.ci4: %.ci4.png
 $(BUILD_DIR)/%.elf: $(BUILD_DIR)/%.o
 	$(call print,Linking ELF file:,$<,$@)
 	$(V)$(LD) -e 0 -Ttext=$(SEGMENT_ADDRESS) -Map $@.map -o $@ $<
+#$(V)$(LD) -e 0 -Ttext=$(SEGMENT_ADDRESS) -Map $@.map -o $@ $<
+#$(V)$(CC) $(CFLAGS) -e 0 -Wl,-Ttext=$(SEGMENT_ADDRESS),-Map,$@.map -o $@ $<
 # Override for leveldata.elf, which otherwise matches the above pattern
 .SECONDEXPANSION:
 $(BUILD_DIR)/levels/%/leveldata.elf: $(BUILD_DIR)/levels/%/leveldata.o $(BUILD_DIR)/bin/$$(TEXTURE_BIN).elf
 	$(call print,Linking ELF file:,$<,$@)
 	$(V)$(LD) -e 0 -Ttext=$(SEGMENT_ADDRESS) -Map $@.map --just-symbols=$(BUILD_DIR)/bin/$(TEXTURE_BIN).elf -o $@ $<
+#$(V)$(CC) $(CFLAGS) -e 0 -Wl,-Ttext=$(SEGMENT_ADDRESS),-Map,$@.map,--just-symbols=$(BUILD_DIR)/bin/$(TEXTURE_BIN).elf -o $@ $<
+#$(V)$(LD) -e 0 -Ttext=$(SEGMENT_ADDRESS) -Map $@.map --just-symbols=$(BUILD_DIR)/bin/$(TEXTURE_BIN).elf -o $@ $<
 
 $(BUILD_DIR)/%.bin: $(BUILD_DIR)/%.elf
 	$(call print,Extracting compressible data from:,$<,$@)
@@ -537,6 +547,8 @@ $(BUILD_DIR)/%.mio0: $(BUILD_DIR)/%.bin
 $(BUILD_DIR)/%.mio0.o: $(BUILD_DIR)/%.mio0
 	$(call print,Converting MIO0 to ELF:,$<,$@)
 	$(V)$(LD) -r -b binary $< -o $@
+#$(V)$(CC) $(CFLAGS) -Wl,-r,-b,binary $< -o $@
+#$(V)$(LD) -r -b binary $< -o $@
 
 
 #==============================================================================#
