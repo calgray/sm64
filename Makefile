@@ -519,16 +519,20 @@ $(BUILD_DIR)/%.ci4: %.ci4.png
 # TODO: ideally this would be `-Trodata-segment=0x07000000` but that doesn't set the address
 $(BUILD_DIR)/%.elf: $(BUILD_DIR)/%.o
 	$(call print,Linking ELF file:,$<,$@)
-	$(V)$(LD) -e 0 -Ttext=$(SEGMENT_ADDRESS) -Map $@.map -o $@ $<
+	$(V)$(CC) -mabi=32 -nostdlib -e 0 -Ttext=$(SEGMENT_ADDRESS) -Wl,-Map,$@.map -o $@ $<
 #$(V)$(LD) -e 0 -Ttext=$(SEGMENT_ADDRESS) -Map $@.map -o $@ $<
 #$(V)$(CC) $(CFLAGS) -e 0 -Wl,-Ttext=$(SEGMENT_ADDRESS),-Map,$@.map -o $@ $<
+#$(V)$(CC) -mabi=32 -e 0 -Ttext=$(SEGMENT_ADDRESS) -Wl,-Map,$@.map -o $@ $<
+#$(V)$(CC) -mabi=32 -Wl,-e,0,-Ttext,$(SEGMENT_ADDRESS),-Map,$@.map,-o,$@,$<
+
 # Override for leveldata.elf, which otherwise matches the above pattern
 .SECONDEXPANSION:
 $(BUILD_DIR)/levels/%/leveldata.elf: $(BUILD_DIR)/levels/%/leveldata.o $(BUILD_DIR)/bin/$$(TEXTURE_BIN).elf
 	$(call print,Linking ELF file:,$<,$@)
-	$(V)$(LD) -e 0 -Ttext=$(SEGMENT_ADDRESS) -Map $@.map --just-symbols=$(BUILD_DIR)/bin/$(TEXTURE_BIN).elf -o $@ $<
-#$(V)$(CC) $(CFLAGS) -e 0 -Wl,-Ttext=$(SEGMENT_ADDRESS),-Map,$@.map,--just-symbols=$(BUILD_DIR)/bin/$(TEXTURE_BIN).elf -o $@ $<
+	$(V)$(CC) -mabi=32 -nostdlib -e 0 -Ttext=$(SEGMENT_ADDRESS) -Wl,-Map,$@.map,-R,$(BUILD_DIR)/bin/$(TEXTURE_BIN).elf -o $@ $<
 #$(V)$(LD) -e 0 -Ttext=$(SEGMENT_ADDRESS) -Map $@.map --just-symbols=$(BUILD_DIR)/bin/$(TEXTURE_BIN).elf -o $@ $<
+#$(V)$(CC) $(CFLAGS) -e 0 -Wl,-Ttext=$(SEGMENT_ADDRESS),-Map,$@.map,--just-symbols=$(BUILD_DIR)/bin/$(TEXTURE_BIN).elf -o $@ $<
+#$(V)$(CC) -mabi=32 -Wl,-e,0,-Ttext,$(SEGMENT_ADDRESS),-Map,$@.map,-R,$(BUILD_DIR)/bin/$(TEXTURE_BIN).elf,-o,$@,$<
 
 $(BUILD_DIR)/%.bin: $(BUILD_DIR)/%.elf
 	$(call print,Extracting compressible data from:,$<,$@)
@@ -546,8 +550,8 @@ $(BUILD_DIR)/%.mio0: $(BUILD_DIR)/%.bin
 # convert binary mio0 to object file
 $(BUILD_DIR)/%.mio0.o: $(BUILD_DIR)/%.mio0
 	$(call print,Converting MIO0 to ELF:,$<,$@)
-	$(V)$(LD) -r -b binary $< -o $@
-#$(V)$(CC) $(CFLAGS) -Wl,-r,-b,binary $< -o $@
+	$(V)$(CC) -mabi=32 -r -Wl,-b,binary $< -o $@
+#$(V)$(CC) -mabi=32 -r -Wl,-b,binary $< -o $@
 #$(V)$(LD) -r -b binary $< -o $@
 
 
@@ -747,12 +751,15 @@ $(BUILD_DIR)/libgoddard.a: $(GODDARD_O_FILES)
 
 # Link SM64 ELF file
 SYMBOL_LINKING_FLAGS := $(addprefix -R ,$(SEG_FILES))
-LDFLAGS := -Map $(BUILD_DIR)/sm64.$(VERSION).map --no-check-sections $(SYMBOL_LINKING_FLAGS)
+LDFLAGS := -L $(BUILD_DIR) -T undefined_syms.txt -T $(BUILD_DIR)/$(LD_SCRIPT) -Map $(BUILD_DIR)/sm64.$(VERSION).map --no-check-sections $(SYMBOL_LINKING_FLAGS)
 COMMA := ,
 GCC_LDFLAGS := -Wl,$(subst $() $(),$(COMMA),$(LDFLAGS))
 $(ELF): $(O_FILES) $(MIO0_OBJ_FILES) $(SEG_FILES) $(BUILD_DIR)/$(LD_SCRIPT) undefined_syms.txt $(BUILD_DIR)/libultra.a $(BUILD_DIR)/libgoddard.a
 	@$(PRINT) "$(GREEN)Linking ELF file:  $(BLUE)$@ $(NO_COL)\n"
-	$(V)$(CC) -L $(BUILD_DIR) -T undefined_syms.txt -T $(BUILD_DIR)/$(LD_SCRIPT) $(GCC_LDFLAGS) $(CFLAGS) -o $@ $(O_FILES) -lultra -lgoddard
+	$(V)$(CC) -mabi=32 -nostdlib $(GCC_LDFLAGS) -o $@ $(O_FILES) -lultra -lgoddard
+#$(V)$(LD) -L $(BUILD_DIR) -T undefined_syms.txt -T $(BUILD_DIR)/$(LD_SCRIPT) -Map $(BUILD_DIR)/sm64.$(VERSION).map --no-check-sections $(addprefix -R ,$(SEG_FILES)) -o $@ $(O_FILES) -lultra -lgoddard
+#$(V)$(CC) -L $(BUILD_DIR) -T undefined_syms.txt -T $(BUILD_DIR)/$(LD_SCRIPT) $(GCC_LDFLAGS) $(CFLAGS) -o $@ $(O_FILES) -lultra -lgoddard
+#$(V)$(CC) -mabi=32 $(GCC_LDFLAGS) -o $@ $(O_FILES) -lultra -lgoddard
 
 # Build ROM
 $(ROM): $(ELF)
