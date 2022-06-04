@@ -762,10 +762,14 @@ foreach(COMMON_SRC ${COMMON_SRCS})
     set(build_out_path ${common_target_dir}/${out_path})
     set(full_out_path ${CMAKE_CURRENT_BINARY_DIR}/${build_out_path})
 
+    # add_custom_target(${bin_target}_dir
+    #     COMMAND mkdir -p ${CMAKE_CURRENT_BINARY_DIR}/${common_target_dir}/${out_dir}
+    # )
     add_executable(${bin_target}
         ${COMMON_SRC}
     )
-    add_dependencies(${bin_target} localized_text textures)
+    #TODO only using sky here to create common_target_dir
+    add_dependencies(${bin_target} localized_text textures) # ${bin_target}_dir)
     set_target_properties(${bin_target} PROPERTIES
         PREFIX ""
         OUTPUT_NAME ${file_out}
@@ -809,7 +813,7 @@ foreach(COMMON_SRC ${COMMON_SRCS})
         ${CMAKE_CURRENT_BINARY_DIR}/${text_target_dir}
     )
     target_link_libraries(${bin_target} PRIVATE n64)
-    target_link_options(${bin_target} PUBLIC
+    target_link_options(${bin_target} PRIVATE
         -mabi=32
         -nostdlib
         -e 0
@@ -931,8 +935,7 @@ foreach(LEVEL_SRC ${LEVEL_SRCS})
         OUTPUT_VARIABLE texture_address
         OUTPUT_STRIP_TRAILING_WHITESPACE
     )    
-    target_link_options(${level_target} PUBLIC
-        # Map file currently not used
+    target_link_options(${level_target} PRIVATE
         -mabi=32
         -nostdlib
         -e 0
@@ -1000,12 +1003,13 @@ target_link_libraries(${TARGET_NAME} PRIVATE n64)
 target_include_directories(${TARGET_NAME} PRIVATE .)
 target_include_directories(${TARGET_NAME} PUBLIC
     include
+    include/libc
     src
     #sound
     #assets
     ${N64SDK_DIR}/include/n64
     ${N64SDK_DIR}/include/n64/PR
-    ${N64SDK_DIR}/include/n64/nusys
+    #${N64SDK_DIR}/include/n64/nusys
     ${CMAKE_SOURCE_DIR}/projects/nucpp/include
 
     # preprocessed headers
@@ -1039,6 +1043,24 @@ target_compile_definitions(${TARGET_NAME} PUBLIC
     AVOID_UB=1
 )
 
+target_compile_options(${TARGET_NAME} PUBLIC
+    -nostdinc
+    -mips3
+    -mno-shared
+    -mhard-float
+    -mdivide-breaks
+    -fno-stack-protector
+    -fno-common
+    -fno-zero-initialized-in-bss
+    -fno-PIC
+    -mno-abicalls
+    -fno-strict-aliasing
+    -fno-inline-functions
+    -ffreestanding
+    -fwrapv
+    -Wall
+    -Wextra
+)
 
 ###################
 # build boot object
@@ -1124,12 +1146,11 @@ set_target_properties(sm64plus::ultra
 ###########
 list(TRANSFORM SEG_FILES PREPEND "-R,")
 list(JOIN SEG_FILES , GCC_LDFLAGS)
-target_link_options(${TARGET_NAME}
-    PUBLIC
+target_link_options(${TARGET_NAME} PRIVATE
     -mabi=32
     -nostdlib
     -L ${BUILD_DIR}
-    #${BUILD_DIR}/${BOOT_OBJ}
+    # ${BUILD_DIR}/${BOOT_OBJ}
     -Wl,-T,undefined_syms.txt,-T,${BUILD_DIR}/${LD_SCRIPT},-Map,${BUILD_DIR}/${TARGET_NAME}.map,--no-check-sections,${GCC_LDFLAGS}
 )
 target_link_directories(${TARGET_NAME}
@@ -1159,9 +1180,9 @@ target_link_libraries(${TARGET_NAME} PRIVATE
     #gcc
 )
 
-######################
-# Pad (for bootcode?)
-######################
+######
+# Pad
+######
 add_custom_command(TARGET ${TARGET_NAME}
     POST_BUILD
     COMMAND ${CMAKE_OBJCOPY} --pad-to=0x800000 --gap-fill=0xFF $<TARGET_FILE:${TARGET_NAME}> ${BIN_NAME} -O binary
@@ -1179,3 +1200,5 @@ add_custom_command(TARGET ${TARGET_NAME}
 # undefined reference to `NU_SPEC_BOOT_STACK`
 # - missing "-x assembler-with-cpp" on assembling asm objects
 
+# defined in discarded section .rodata*
+# - 
