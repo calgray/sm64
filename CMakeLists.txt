@@ -276,6 +276,7 @@ add_custom_command(
 )
 target_sources(sky PRIVATE ${full_out_path})
 
+# skyboxes
 set(SKY_SRCS
     textures/skyboxes/bbh.png
     textures/skyboxes/bidw.png
@@ -312,7 +313,7 @@ foreach(SKY_SRC ${SKY_SRCS})
 
     set(build_in_path ${full_out_path})
     set(out_path ${out_dir}/${file_out}_skybox.elf)
-    set(build_out_path ${common_target_dir}/${out_path})
+    set(build_out_path ${sky_target_dir}/${out_path})
     set(full_out_path ${CMAKE_CURRENT_BINARY_DIR}/${build_out_path})
     add_executable(${file_out}_skybox
         ${build_in_path}
@@ -363,7 +364,11 @@ foreach(SKY_SRC ${SKY_SRCS})
         # ${CMAKE_CURRENT_BINARY_DIR}/${BUILD_DIR}/include # text
     )
     target_link_options(${file_out}_skybox PRIVATE
-        -Wl,-e,0,-Ttext=0x0A000000,-Map,${sky_target_dir}/${out_dir}/${file_out}_skybox.elf.map
+        -mabi=32
+        -nostdlib
+        -e 0
+        -Ttext=0x0A000000
+        -Wl,-Map,${sky_target_dir}/${out_dir}/${file_out}_skybox.elf.map
     )
     list(APPEND SEG_FILES ${full_out_path})
 
@@ -711,9 +716,9 @@ foreach(RSP_SRC ${RSP_SRCS})
 endforeach()
 
 
-############################################
-# Common (bin) + Actors Compressed ELF Load Points
-############################################
+#############################################################
+# Common (bin) Textures + Actors Compressed ELF Load Points
+#############################################################
 add_custom_target(common)
 #set(common_target_dir "CMakeFiles/_common.dir")
 set(common_target_dir ${bin_target_dir})
@@ -805,7 +810,11 @@ foreach(COMMON_SRC ${COMMON_SRCS})
     )
     target_link_libraries(${bin_target} PRIVATE n64)
     target_link_options(${bin_target} PUBLIC
-        -Wl,-e,0,-Ttext=0x09000000,-Map,${full_out_path}.map
+        -mabi=32
+        -nostdlib
+        -e 0
+        -Ttext=0x09000000
+        -Wl,-Map,${full_out_path}.map
     )
     list(APPEND SEG_FILES ${full_out_path})
     
@@ -924,7 +933,11 @@ foreach(LEVEL_SRC ${LEVEL_SRCS})
     )    
     target_link_options(${level_target} PUBLIC
         # Map file currently not used
-        -Wl,-e,0,-Ttext=${texture_address},-Map,${level_target}.elf.map,--just-symbols=${common_target_dir}/${LOCALE}/bin/${texture_bin}.elf
+        -mabi=32
+        -nostdlib
+        -e 0
+        -Ttext=${texture_address}
+        -Wl,-Map,${level_target}.elf.map,-R,${common_target_dir}/${LOCALE}/bin/${texture_bin}.elf
     )
     endif()
     list(APPEND SEG_FILES ${full_out_path})
@@ -1113,10 +1126,11 @@ list(TRANSFORM SEG_FILES PREPEND "-R,")
 list(JOIN SEG_FILES , GCC_LDFLAGS)
 target_link_options(${TARGET_NAME}
     PUBLIC
+    -mabi=32
+    -nostdlib
     -L ${BUILD_DIR}
     #${BUILD_DIR}/${BOOT_OBJ}
-    -T undefined_syms.txt
-    -Wl,-T,${BUILD_DIR}/${LD_SCRIPT},-Map,${BUILD_DIR}/${TARGET_NAME}.map,--no-check-sections,${GCC_LDFLAGS}
+    -Wl,-T,undefined_syms.txt,-T,${BUILD_DIR}/${LD_SCRIPT},-Map,${BUILD_DIR}/${TARGET_NAME}.map,--no-check-sections,${GCC_LDFLAGS}
 )
 target_link_directories(${TARGET_NAME}
     PUBLIC
