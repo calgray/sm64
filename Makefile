@@ -521,9 +521,7 @@ $(BUILD_DIR)/%.elf: $(BUILD_DIR)/%.o
 	$(call print,Linking ELF file:,$<,$@)
 	$(V)$(CC) -mabi=32 -nostdlib -e 0 -Ttext=$(SEGMENT_ADDRESS) -Wl,-Map,$@.map -o $@ $<
 #$(V)$(LD) -e 0 -Ttext=$(SEGMENT_ADDRESS) -Map $@.map -o $@ $<
-#$(V)$(CC) $(CFLAGS) -e 0 -Wl,-Ttext=$(SEGMENT_ADDRESS),-Map,$@.map -o $@ $<
-#$(V)$(CC) -mabi=32 -e 0 -Ttext=$(SEGMENT_ADDRESS) -Wl,-Map,$@.map -o $@ $<
-#$(V)$(CC) -mabi=32 -Wl,-e,0,-Ttext,$(SEGMENT_ADDRESS),-Map,$@.map,-o,$@,$<
+#$(V)$(CC) -mabi=32 -nostdlib -e 0 -Ttext=$(SEGMENT_ADDRESS) -Wl,-Map,$@.map -o $@ $<
 
 # Override for leveldata.elf, which otherwise matches the above pattern
 .SECONDEXPANSION:
@@ -751,15 +749,14 @@ $(BUILD_DIR)/libgoddard.a: $(GODDARD_O_FILES)
 
 # Link SM64 ELF file
 SYMBOL_LINKING_FLAGS := $(addprefix -R ,$(SEG_FILES))
-LDFLAGS := -L $(BUILD_DIR) -T undefined_syms.txt -T $(BUILD_DIR)/$(LD_SCRIPT) -Map $(BUILD_DIR)/sm64.$(VERSION).map --no-check-sections $(SYMBOL_LINKING_FLAGS)
+LDFLAGS := -T undefined_syms.txt -T $(BUILD_DIR)/$(LD_SCRIPT) -Map $(BUILD_DIR)/sm64.$(VERSION).map --no-check-sections $(SYMBOL_LINKING_FLAGS)
 COMMA := ,
 GCC_LDFLAGS := -Wl,$(subst $() $(),$(COMMA),$(LDFLAGS))
 $(ELF): $(O_FILES) $(MIO0_OBJ_FILES) $(SEG_FILES) $(BUILD_DIR)/$(LD_SCRIPT) undefined_syms.txt $(BUILD_DIR)/libultra.a $(BUILD_DIR)/libgoddard.a
 	@$(PRINT) "$(GREEN)Linking ELF file:  $(BLUE)$@ $(NO_COL)\n"
-	$(V)$(CC) -mabi=32 -nostdlib $(GCC_LDFLAGS) -o $@ $(O_FILES) -lultra -lgoddard
+	$(V)$(CC) -mabi=32 -nostdlib -L $(BUILD_DIR) $(GCC_LDFLAGS) -o $@ $(O_FILES) -lultra -lgoddard
 #$(V)$(LD) -L $(BUILD_DIR) -T undefined_syms.txt -T $(BUILD_DIR)/$(LD_SCRIPT) -Map $(BUILD_DIR)/sm64.$(VERSION).map --no-check-sections $(addprefix -R ,$(SEG_FILES)) -o $@ $(O_FILES) -lultra -lgoddard
-#$(V)$(CC) -L $(BUILD_DIR) -T undefined_syms.txt -T $(BUILD_DIR)/$(LD_SCRIPT) $(GCC_LDFLAGS) $(CFLAGS) -o $@ $(O_FILES) -lultra -lgoddard
-#$(V)$(CC) -mabi=32 $(GCC_LDFLAGS) -o $@ $(O_FILES) -lultra -lgoddard
+#$(V)$(CC) -mabi=32 -nostdlib -L $(BUILD_DIR) $(GCC_LDFLAGS) -o $@ $(O_FILES) -lultra -lgoddard
 
 # Build ROM
 $(ROM): $(ELF)
