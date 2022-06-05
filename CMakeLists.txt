@@ -627,7 +627,7 @@ add_custom_command(
     -DVERSION_US=1
     -DF3D_OLD=1
     -DNON_MATCHING=1
-    -DAVOID_UB=1 > build/us/assets/demo_data.c > ${full_out_path}
+    -DAVOID_UB=1 > ${full_out_path}
     WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
 )
 target_sources(${animation_target} PRIVATE ${full_out_path})
@@ -1087,7 +1087,8 @@ set(MOD_FLAGS
     -DF3DEX_GBI_2=1
     -DNAUDIO=1
     -DBUILD_DIR=${BUILD_DIR}
-    -DLIB_DIR=../../../../../projects/sm64plus/build/${LOCALE}
+    -DLIB_DIR=us
+    #../../../../../projects/sm64plus/build/${LOCALE}
     -DSM64_TARGET_DIR=${SM64_TARGET_DIR}
     -DBIN_TARGET_DIR=${bin_target_dir}/${LOCALE}
     -DANIM_TARGET_DIR=${animation_target_dir}/${LOCALE}
@@ -1130,14 +1131,14 @@ add_custom_command(TARGET ${TARGET_NAME}
 add_library(sm64plus::goddard STATIC IMPORTED)
 set_target_properties(sm64plus::goddard
     PROPERTIES
-    IMPORTED_LOCATION ${CMAKE_CURRENT_LIST_DIR}/build/${LOCALE}/libgoddard.a
+    IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/${LOCALE}/libgoddard.a
     INTERFACE_INCLUDE_DIRECTORIES ${CMAKE_CURRENT_LIST_DIR}/src/goddard
 )
 
 add_library(sm64plus::ultra STATIC IMPORTED)
 set_target_properties(sm64plus::ultra
     PROPERTIES
-    IMPORTED_LOCATION ${CMAKE_CURRENT_LIST_DIR}/build/${LOCALE}/libultra.a
+    IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/${LOCALE}/libultra.a
     #INTERFACE_INCLUDE_DIRECTORIES ${CMAKE_CURRENT_LIST_DIR}/include
 )
 
