@@ -330,7 +330,12 @@ ifneq (,$(call find-command,clang))
   CPPFLAGS := -E -P -x c -Wno-trigraphs $(DEF_INC_CFLAGS)
 else
   CPP      := cpp
-  CPPFLAGS := -P -Wno-trigraphs $(DEF_INC_CFLAGS)
+  CPPFLAGS := -P -Wno-trigraphs -undef $(DEF_INC_CFLAGS)
+endif
+
+ifeq ($(COMPILER),gcc)
+CPP      := $(CROSS)cpp
+CPPFLAGS := -P -Wno-trigraphs -undef $(DEF_INC_CFLAGS)
 endif
 
 # Check code syntax with host compiler
@@ -345,7 +350,7 @@ else
   CFLAGS += -non_shared -Wab,-r4300_mul -Xcpluscomm -Xfullwarn -signed -32
 endif
 
-ASFLAGS     := -march=vr4300 -mabi=32 $(foreach i,$(INCLUDE_DIRS),-I$(i)) $(foreach d,$(DEFINES),--defsym $(d))
+ASFLAGS     := -march=vr4300 -mabi=32 $(foreach i,$(INCLUDE_DIRS),-I$(i)) $(foreach d,$(DEFINES),-D$(d))
 RSPASMFLAGS := $(foreach d,$(DEFINES),-definelabel $(subst =, ,$(d)))
 
 ifeq ($(shell getconf LONG_BIT), 32)
@@ -724,7 +729,7 @@ endif
 # Assemble assembly code
 $(BUILD_DIR)/%.o: %.s
 	$(call print,Assembling:,$<,$@)
-	$(V)$(CPP) $(CPPFLAGS) $< | $(AS) $(ASFLAGS) -MD $(BUILD_DIR)/$*.d -o $@
+	$(V)$(CPP) $(CPPFLAGS) $< | $(CC) $(ASFLAGS) -c -x assembler -MMD -MP -MF $(BUILD_DIR)/$*.d -o $@ -
 
 # Assemble RSP assembly code
 $(BUILD_DIR)/rsp/%.bin $(BUILD_DIR)/rsp/%_data.bin: rsp/%.s
@@ -754,7 +759,7 @@ COMMA := ,
 GCC_LDFLAGS := -Wl,$(subst $() $(),$(COMMA),$(LDFLAGS))
 $(ELF): $(O_FILES) $(MIO0_OBJ_FILES) $(SEG_FILES) $(BUILD_DIR)/$(LD_SCRIPT) undefined_syms.txt $(BUILD_DIR)/libultra.a $(BUILD_DIR)/libgoddard.a
 	@$(PRINT) "$(GREEN)Linking ELF file:  $(BLUE)$@ $(NO_COL)\n"
-	$(V)$(CC) -mabi=32 -nostdlib -L $(BUILD_DIR) $(GCC_LDFLAGS) -o $@ $(O_FILES) -lultra -lgoddard
+	$(V)$(CC) -mabi=32 -nostdlib -L $(BUILD_DIR) $(GCC_LDFLAGS) -o $@ -lultra -lgoddard
 #$(V)$(LD) -L $(BUILD_DIR) -T undefined_syms.txt -T $(BUILD_DIR)/$(LD_SCRIPT) -Map $(BUILD_DIR)/sm64.$(VERSION).map --no-check-sections $(addprefix -R ,$(SEG_FILES)) -o $@ $(O_FILES) -lultra -lgoddard
 #$(V)$(CC) -mabi=32 -nostdlib -L $(BUILD_DIR) $(GCC_LDFLAGS) -o $@ $(O_FILES) -lultra -lgoddard
 
