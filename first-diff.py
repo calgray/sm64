@@ -84,6 +84,9 @@ basemap = f"sm64.{version}.map"
 myimg = f"build/{version}/sm64.{version}.z64"
 mymap = f"build/{version}/{basemap}"
 
+myimg = f"../../build/arch-mips64-elf-n64sdkmod/FLASHCART-Release/projects/sm64plus/sm64.{version}.z64"
+mymap = f"../../build/arch-mips64-elf-n64sdkmod/FLASHCART-Release/projects/sm64plus/CMakeFiles/sm64.us.dir/{basemap}"
+
 if os.path.isfile("expected/" + mymap):
     basemap = "expected/" + mymap
 

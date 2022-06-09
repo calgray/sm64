@@ -1,5 +1,5 @@
 
-set(TARGET_NAME sm64plus)
+set(TARGET_NAME sm64.us)
 set(LD_SCRIPT sm64.ld)
 # replace /usr with N64SDK_DIR in .ld
 
@@ -13,9 +13,6 @@ set( LOCALE               us )
 # Tested with Unix Makefiles build dir
 set(BUILD_DIR             "CMakeFiles/${TARGET_NAME}.dir")
 set(SM64_TARGET_DIR       "CMakeFiles/${TARGET_NAME}.dir")
-
-# TODO remove
-add_custom_target(PRE-${TARGET_NAME})
 
 # file(GLOB_RECURSE C_SRCS RELATIVE ${CMAKE_CURRENT_LIST_DIR} src/goddard/*.c)
 # add_library(goddard
@@ -39,8 +36,10 @@ file(GLOB_RECURSE C_SRCS RELATIVE ${CMAKE_CURRENT_LIST_DIR}
     levels/*.c
     #actors/common0.c
     #actors/common1.c
-    actors/*_geo.c
+    #actors/*_geo.c
+    actors/*.c
     data/*.c
+    bin/*.c
 )
 list(FILTER C_SRCS EXCLUDE REGEX .inc.c)
 list(FILTER C_SRCS EXCLUDE REGEX /eu/)
@@ -49,7 +48,22 @@ file(GLOB_RECURSE CPP_SRCS RELATIVE ${CMAKE_CURRENT_LIST_DIR} src/*.cpp)
 
 set(TOOLS_DIR ${CMAKE_CURRENT_LIST_DIR}/tools)
 
-set(bin_target_dir CMakeFiles/_bin.dir)
+set(lib_dir                      build)
+set(bin_target_dir               build)
+set(text_target_dir              build)
+set(level_headers_target_dir     build)
+set(textures_target_dir          build)
+set(sky_target_dir               build)
+set(sound_target_dir             build)
+set(rsp_target_dir               build)
+set(animation_target_dir         build)
+set(common_target_dir            build)
+set(levels_target_dir            build)
+
+define_property(SOURCE PROPERTY SEGMENT_ADDRESS
+    BRIEF_DOCS "segment location"
+    FULL_DOCS "segment location to load to"
+)
 
 #########
 # Start!
@@ -65,7 +79,6 @@ set(TEXT_SRCS
 )
 
 # WARNING!!! custom output dir must start with either _,a,b,c,d,e,f,g,h,i,j,k,l,m,n,o
-set(text_target_dir "CMakeFiles/_localized_text.dir")
 add_custom_target(localized_text)
 # TODO!!! WORKING_DIRECTORY ${text_target_dir})
 foreach(TEXT_SRC ${TEXT_SRCS})
@@ -74,14 +87,14 @@ foreach(TEXT_SRC ${TEXT_SRCS})
     set(out_dir ${file_dir}/${LOCALE})
 
     set(out_path ${out_dir}/${file_out}) # e.g. text/us/define_text.inc.c
-    set(build_out_path ${text_target_dir}/${out_path})
+    set(build_out_path ${text_target_dir}/${LOCALE}/${out_path})
     set(full_out_path ${CMAKE_CURRENT_BINARY_DIR}/${build_out_path})
 
     add_custom_command(
         OUTPUT ${full_out_path}.preprocessed
         MAIN_DEPENDENCY ${TEXT_SRC}
         COMMAND
-            mkdir -p ${text_target_dir}/${out_dir}
+            mkdir -p ${text_target_dir}/${LOCALE}/${out_dir}
         COMMAND
             ${CMAKE_C_PREPROCESSOR} -P -Wno-trigraphs
             -I${CMAKE_CURRENT_LIST_DIR}/include
@@ -108,9 +121,7 @@ foreach(TEXT_SRC ${TEXT_SRCS})
     target_sources(localized_text PRIVATE ${full_out_path})
 endforeach()
 
-##################################
 # generate localized text headers
-##################################
 set(TEXT_HEADERS
     include/text_strings.h.in
     include/text_menu_strings.h.in
@@ -140,7 +151,6 @@ endforeach()
 ############################
 # Preprocess Level Headers
 ############################
-set(level_headers_target_dir "CMakeFiles/_levels.dir")
 add_custom_target(level_headers)
 set(LEVEL_HEADER
     levels/level_headers.h.in
@@ -176,7 +186,6 @@ target_sources(level_headers PRIVATE ${full_out_path})
 # generate texture sources
 ###########################
 add_custom_target(textures)
-set(textures_target_dir "CMakeFiles/_textures.dir")
 set(TEXTURE_ENCODING u8)
 file(GLOB_RECURSE IMAGE_SRCS RELATIVE ${CMAKE_CURRENT_LIST_DIR}
     textures/*.rgba32.png
@@ -255,9 +264,6 @@ endforeach()
 # generate skyboxes
 ######################
 add_custom_target(sky)
-#set(sky_target_dir "CMakeFiles/_sky.dir")
-set(sky_target_dir ${bin_target_dir})
-
 # Cake
 set(CAKE_SRC levels/ending/cake.png)
 set(out_dir ${LOCALE}/levels/ending)
@@ -363,6 +369,7 @@ foreach(SKY_SRC ${SKY_SRCS})
         # ${CMAKE_CURRENT_BINARY_DIR}/${BUILD_DIR} # textures
         # ${CMAKE_CURRENT_BINARY_DIR}/${BUILD_DIR}/include # text
     )
+    # TODO: check skybox location
     target_link_options(${file_out}_skybox PRIVATE
         -mabi=32
         -nostdlib
@@ -427,8 +434,6 @@ endforeach()
 #####################
 # Generate sounds
 #####################
-
-set(sound_target_dir CMakeFiles/_sound.dir)
 add_custom_target(sound)
 file(GLOB_RECURSE SOUND_SAMPLES RELATIVE ${CMAKE_CURRENT_LIST_DIR} sound/*.aiff)
 foreach(SOUND_SAMPLE ${SOUND_SAMPLES})
@@ -524,7 +529,7 @@ add_custom_command(
 )
 target_sources(sound PRIVATE ${sound_data_dir}/sound_data.tbl.inc.c)
 
-# generate sound_player.m64
+# generate 00_sound_player.o
 add_custom_command(
     OUTPUT ${sound_data_dir}/sequences/00_sound_player.o
     MAIN_DEPENDENCY sound/sequences/00_sound_player.s
@@ -544,6 +549,7 @@ add_custom_command(
         -
     WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
 )
+# generate 00_sound_player.m64
 add_custom_command(
     OUTPUT ${sound_data_dir}/sequences/00_sound_player.m64
     MAIN_DEPENDENCY ${sound_data_dir}/sequences/00_sound_player.o
@@ -601,21 +607,20 @@ target_sources(sound PRIVATE ${sound_data_dir}/bank_sets.inc.c)
 
 set(animation_target animation)
 add_library(${animation_target} OBJECT)
-set(animation_target_dir CMakeFiles/animation.dir)
 #mario animation data
-set(full_out_path ${CMAKE_CURRENT_BINARY_DIR}/${LOCALE}/assets/mario_anim_data.c)
+set(full_out_path ${CMAKE_CURRENT_BINARY_DIR}/${animation_target_dir}/${LOCALE}/assets/mario_anim_data.c)
 add_custom_command(
     OUTPUT ${full_out_path}
-    COMMAND mkdir -p ${CMAKE_CURRENT_BINARY_DIR}/${LOCALE}/assets
+    COMMAND mkdir -p ${CMAKE_CURRENT_BINARY_DIR}/${animation_target_dir}/${LOCALE}/assets
     COMMAND python3 ${TOOLS_DIR}/mario_anims_converter.py > ${full_out_path}
     WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
 )
 target_sources(${animation_target} PRIVATE ${full_out_path})
 # demo data
-set(full_out_path ${CMAKE_CURRENT_BINARY_DIR}/${LOCALE}/assets/demo_data.c)
+set(full_out_path ${CMAKE_CURRENT_BINARY_DIR}/${animation_target_dir}/${LOCALE}/assets/demo_data.c)
 add_custom_command(
     OUTPUT ${full_out_path}
-    COMMAND mkdir -p ${CMAKE_CURRENT_BINARY_DIR}/${LOCALE}/assets
+    COMMAND mkdir -p ${CMAKE_CURRENT_BINARY_DIR}/${animation_target_dir}/${LOCALE}/assets
     COMMAND python3 ${TOOLS_DIR}/demo_data_converter.py
     assets/demo_data.json
     -Iinclude
@@ -631,15 +636,16 @@ add_custom_command(
     WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
 )
 target_sources(${animation_target} PRIVATE ${full_out_path})
-# compile
-# set_target_properties(${bin_target} PROPERTIES
-#     PREFIX ""
-#     OUTPUT_NAME ${file_out}
-#     SUFFIX ".elf"
-#     ARCHIVE_OUTPUT_DIRECTORY ${common_target_dir}/${out_dir}
-#     LIBRARY_OUTPUT_DIRECTORY ${common_target_dir}/${out_dir}
-#     RUNTIME_OUTPUT_DIRECTORY ${common_target_dir}/${out_dir}
-# )
+
+# # compile
+set_target_properties(${animation_target} PROPERTIES
+    PREFIX ""
+    OUTPUT_NAME ${file_out}
+    SUFFIX ".elf"
+    ARCHIVE_OUTPUT_DIRECTORY ${common_target_dir}/${out_dir}
+    LIBRARY_OUTPUT_DIRECTORY ${common_target_dir}/${out_dir}
+    RUNTIME_OUTPUT_DIRECTORY ${common_target_dir}/${out_dir}
+)
 target_compile_definitions(${animation_target} PRIVATE
     TARGET_N64=1
     _LANGUAGE_C=1
@@ -681,7 +687,6 @@ target_link_libraries(${animation_target} PRIVATE n64)
 # generate rsp binaries
 ########################
 add_custom_target(rsp)
-set(rsp_target_dir CMakeFiles/_rsp.dir)
 file(GLOB_RECURSE RSP_SRCS RELATIVE ${CMAKE_CURRENT_LIST_DIR} rsp/*.s)
 foreach(RSP_SRC ${RSP_SRCS})
     cmake_path(GET RSP_SRC PARENT_PATH file_dir)
@@ -720,8 +725,6 @@ endforeach()
 # Common (bin) Textures + Actors Compressed ELF Load Points
 #############################################################
 add_custom_target(common)
-#set(common_target_dir "CMakeFiles/_common.dir")
-set(common_target_dir ${bin_target_dir})
 file(GLOB_RECURSE COMMON_SRCS RELATIVE ${CMAKE_CURRENT_LIST_DIR}
     bin/*.c
     actors/group0.c
@@ -745,6 +748,66 @@ file(GLOB_RECURSE COMMON_SRCS RELATIVE ${CMAKE_CURRENT_LIST_DIR}
     actors/common0.c
     actors/common1.c
 )
+set_source_files_properties(bin/segment2.c
+    PROPERTIES SEGMENT_ADDRESS 0x02000000
+)
+set_source_files_properties(bin/title_screen_bg.c
+    PROPERTIES SEGMENT_ADDRESS 0x0A000000
+)
+set_source_files_properties(bin/debug_level_select.c
+    PROPERTIES SEGMENT_ADDRESS 0x07000000
+)
+set_source_files_properties(bin/effect.c
+    PROPERTIES SEGMENT_ADDRESS 0x0B000000
+)
+set_source_files_properties(
+    bin/spooky.c
+    bin/generic.c
+    bin/outside.c
+    bin/snow.c
+    bin/cave.c
+    bin/inside.c
+    bin/water.c
+    bin/fire.c
+    bin/sky.c
+    bin/machine.c
+    bin/mountain.c
+    bin/grass.c
+    PROPERTIES SEGMENT_ADDRESS 0x09000000
+)
+set_source_files_properties(
+    actors/group0.c
+    PROPERTIES SEGMENT_ADDRESS 0x04000000
+)
+set_source_files_properties(
+    actors/group1.c
+    actors/group2.c
+    actors/group3.c
+    actors/group4.c
+    actors/group5.c
+    actors/group6.c
+    actors/group7.c
+    actors/group8.c
+    actors/group9.c
+    actors/group10.c
+    actors/group11.c
+    PROPERTIES SEGMENT_ADDRESS 0x05000000
+)
+set_source_files_properties(
+    actors/group12.c
+    actors/group13.c
+    actors/group14.c
+    actors/group15.c
+    actors/group16.c
+    actors/group17.c
+    PROPERTIES SEGMENT_ADDRESS 0x06000000
+)
+set_source_files_properties(actors/common0.c
+    PROPERTIES SEGMENT_ADDRESS 0x08000000
+)
+set_source_files_properties(actors/common1.c
+    PROPERTIES SEGMENT_ADDRESS 0x03000000
+)
 
 #exclude actors model.inc.c
 list(FILTER COMMON_SRCS EXCLUDE REGEX .inc.c)
@@ -761,10 +824,12 @@ foreach(COMMON_SRC ${COMMON_SRCS})
     set(out_path ${out_dir}/${file_out}.elf)
     set(build_out_path ${common_target_dir}/${out_path})
     set(full_out_path ${CMAKE_CURRENT_BINARY_DIR}/${build_out_path})
+    file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${common_target_dir}/${out_dir})
 
     # add_custom_target(${bin_target}_dir
     #     COMMAND mkdir -p ${CMAKE_CURRENT_BINARY_DIR}/${common_target_dir}/${out_dir}
     # )
+    #add_library(${bin_target}_object OBJECT ${COMMON_SRC})
     add_executable(${bin_target}
         ${COMMON_SRC}
     )
@@ -813,11 +878,20 @@ foreach(COMMON_SRC ${COMMON_SRCS})
         ${CMAKE_CURRENT_BINARY_DIR}/${text_target_dir}
     )
     target_link_libraries(${bin_target} PRIVATE n64)
+
+    #lookup file_out
+    # execute_process(
+    #     COMMAND yq -r ".\"texture-address\"" ${CMAKE_CURRENT_LIST_DIR}/${file_dir}/segment.yaml
+    #     OUTPUT_VARIABLE texture_address
+    #     OUTPUT_STRIP_TRAILING_WHITESPACE
+    # )
+
+    get_source_file_property(segment_address ${COMMON_SRC} SEGMENT_ADDRESS)
     target_link_options(${bin_target} PRIVATE
         -mabi=32
         -nostdlib
         -e 0
-        -Ttext=0x09000000
+        -Ttext=${segment_address}
         -Wl,-Map,${full_out_path}.map
     )
     list(APPEND SEG_FILES ${full_out_path})
@@ -855,9 +929,6 @@ endforeach()
 # Generate Level Compressed ELF Load Points
 ############################################
 add_custom_target(levels)
-#set(levels_target_dir CMakeFiles/_levels.dir)
-set(levels_target_dir ${bin_target_dir})
-
 file(GLOB_RECURSE LEVEL_SRCS RELATIVE ${CMAKE_CURRENT_LIST_DIR}
     levels/*leveldata.c
 )
@@ -922,27 +993,26 @@ foreach(LEVEL_SRC ${LEVEL_SRCS})
         src
         .
     )
-    target_link_libraries(${level_target} PRIVATE n64)
+    target_link_libraries(${level_target} PRIVATE n64) # adds -march=vr4300 -mfix=4300 -mtune=vr4300
     
-    if(EXISTS ${CMAKE_CURRENT_LIST_DIR}/${file_dir}/level.yaml)
+    #if(EXISTS ${CMAKE_CURRENT_LIST_DIR}/${file_dir}/level.yaml)
     execute_process(
         COMMAND yq -r ".\"texture-bin\"" ${CMAKE_CURRENT_LIST_DIR}/${file_dir}/level.yaml
         OUTPUT_VARIABLE texture_bin
         OUTPUT_STRIP_TRAILING_WHITESPACE
+        RESULT_VARIABLE result
     )
-    execute_process(
-        COMMAND yq -r ".\"texture-address\"" ${CMAKE_CURRENT_LIST_DIR}/${file_dir}/level.yaml
-        OUTPUT_VARIABLE texture_address
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-    )    
+    if(NOT result EQUAL "0")
+        message(FATAL_ERROR "Error processing ${CMAKE_CURRENT_LIST_DIR}/${file_dir}/level.yaml")
+    endif()
     target_link_options(${level_target} PRIVATE
         -mabi=32
         -nostdlib
         -e 0
-        -Ttext=${texture_address}
-        -Wl,-Map,${level_target}.elf.map,-R,${common_target_dir}/${LOCALE}/bin/${texture_bin}.elf
+        -Ttext=0x07000000
+        -Wl,-Map,${full_out_path}.map,-R,${common_target_dir}/${LOCALE}/bin/${texture_bin}.elf
     )
-    endif()
+    #endif()
     list(APPEND SEG_FILES ${full_out_path})
 
     # extract compressible data
@@ -997,6 +1067,9 @@ add_dependencies(${TARGET_NAME}
 set_target_properties(${TARGET_NAME} PROPERTIES
     OUTPUT_NAME "${TARGET_NAME}"
     SUFFIX ".elf"
+    # ARCHIVE_OUTPUT_DIRECTORY ${BUILD_DIR}/${LOCALE}
+    # LIBRARY_OUTPUT_DIRECTORY ${BUILD_DIR}/${LOCALE}
+    # RUNTIME_OUTPUT_DIRECTORY ${BUILD_DIR}/${LOCALE}
 )
 target_link_libraries(${TARGET_NAME} PRIVATE n64)
 
@@ -1087,7 +1160,7 @@ set(MOD_FLAGS
     -DF3DEX_GBI_2=1
     -DNAUDIO=1
     -DBUILD_DIR=${BUILD_DIR}
-    -DLIB_DIR=us
+    -DLIB_DIR=build/us
     #../../../../../projects/sm64plus/build/${LOCALE}
     -DSM64_TARGET_DIR=${SM64_TARGET_DIR}
     -DBIN_TARGET_DIR=${bin_target_dir}/${LOCALE}
@@ -1131,14 +1204,14 @@ add_custom_command(TARGET ${TARGET_NAME}
 add_library(sm64plus::goddard STATIC IMPORTED)
 set_target_properties(sm64plus::goddard
     PROPERTIES
-    IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/${LOCALE}/libgoddard.a
+    IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/${lib_dir}/${LOCALE}/libgoddard.a
     INTERFACE_INCLUDE_DIRECTORIES ${CMAKE_CURRENT_LIST_DIR}/src/goddard
 )
 
 add_library(sm64plus::ultra STATIC IMPORTED)
 set_target_properties(sm64plus::ultra
     PROPERTIES
-    IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/${LOCALE}/libultra.a
+    IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/${lib_dir}/${LOCALE}/libultra.a
     #INTERFACE_INCLUDE_DIRECTORIES ${CMAKE_CURRENT_LIST_DIR}/include
 )
 
