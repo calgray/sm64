@@ -14,17 +14,10 @@ set( LOCALE               us )
 set(BUILD_DIR             "CMakeFiles/${TARGET_NAME}.dir")
 set(SM64_TARGET_DIR       "CMakeFiles/${TARGET_NAME}.dir")
 
-# file(GLOB_RECURSE C_SRCS RELATIVE ${CMAKE_CURRENT_LIST_DIR} src/goddard/*.c)
-# add_library(goddard
-#     ${C_SRCS}
-# )
 
-# original config is RELWITHDEBINFO
-#file(GLOB_RECURSE SOUND_SRCS RELATIVE ${CMAKE_CURRENT_LIST_DIR} sound/*.c)
 file(GLOB_RECURSE ASM_SRCS RELATIVE ${CMAKE_CURRENT_LIST_DIR}
     asm/*.s
     lib/rsp.s
-    #assets/*.s
 )
 file(GLOB_RECURSE C_SRCS RELATIVE ${CMAKE_CURRENT_LIST_DIR}
     src/engine/*.c
@@ -95,6 +88,10 @@ target_compile_definitions(sm_n64 INTERFACE
     NON_MATCHING=1
     AVOID_UB=1
 )
+target_include_directories(sm_n64 INTERFACE
+    include
+    include/libc
+)
 
 #####################################
 # preprocess localized text sources
@@ -123,16 +120,16 @@ foreach(TEXT_SRC ${TEXT_SRCS})
             mkdir -p ${text_target_dir}/${LOCALE}/${out_dir}
         COMMAND
             ${CMAKE_C_PREPROCESSOR} -P -Wno-trigraphs
-            -I${CMAKE_CURRENT_LIST_DIR}/include
-            -I${BUILD_DIR}
-            -I${BUILD_DIR}/include
-            -I${CMAKE_CURRENT_LIST_DIR}/src
-            -I${CMAKE_CURRENT_LIST_DIR}
-            -I${CMAKE_CURRENT_LIST_DIR}/include/libc
-            -I${CMAKE_CURRENT_LIST_DIR}/text/us
-            -DVERSION_US=1 -DF3D_OLD=1
+            -Iinclude
+            -Iinclude/libc
+            -I.
+            -Isrc
+            -Itext/us
+            -DVERSION_US=1
+            -DF3D_OLD=1
             -o ${full_out_path}.preprocessed
-            ${CMAKE_CURRENT_LIST_DIR}/${TEXT_SRC}
+            ${TEXT_SRC}
+            WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
     )
     add_custom_command(
         OUTPUT ${full_out_path}
@@ -165,11 +162,12 @@ foreach(TEXT_HEADER ${TEXT_HEADERS})
         OUTPUT ${full_out_path}
         COMMENT "Generating ${build_out_path}"
         COMMAND mkdir -p ${text_target_dir}/${out_dir}
-        COMMAND ${TOOLS_DIR}/textconv ${CMAKE_CURRENT_LIST_DIR}/charmap.txt
-        ${CMAKE_CURRENT_LIST_DIR}/${TEXT_HEADER}
+        COMMAND ${TOOLS_DIR}/textconv charmap.txt
+        ${TEXT_HEADER}
         ${full_out_path}
         BYPRODUCTS ${full_out_path}
-        MAIN_DEPENDENCY ${CMAKE_CURRENT_LIST_DIR}/${TEXT_HEADER}
+        MAIN_DEPENDENCY ${TEXT_HEADER}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
     )
     target_sources(localized_text PRIVATE ${full_out_path})
 endforeach()
@@ -193,18 +191,15 @@ add_custom_command(
     OUTPUT ${full_out_path}
     COMMENT "Generating ${build_out_path}"
     COMMAND mkdir -p ${level_headers_target_dir}/${out_dir}
-    #COMMAND ${CMAKE_C_PREPROCESSOR} -Wno-trigraphs
-    COMMAND clang -E -P -x c -Wno-trigraphs
-    -I${CMAKE_CURRENT_LIST_DIR}/include
-    -I${BUILD_DIR}
-    -I${BUILD_DIR}/include
-    -I${CMAKE_CURRENT_LIST_DIR}/src
-    -I${CMAKE_CURRENT_LIST_DIR}
-    -I${CMAKE_CURRENT_LIST_DIR}/include/libc
-    -DVERSION_US=1 -DF3D_OLD=1
-    ${CMAKE_CURRENT_LIST_DIR}/${LEVEL_HEADER} | sed -E 's|\(.+\)|\#include \"\\1\"|' > ${full_out_path}
+    COMMAND ${CMAKE_C_PREPROCESSOR} -P -Wno-trigraphs -undef
+    -Iinclude
+    -Iinclude/libc
+    -I.
+    -Isrc
+    ${LEVEL_HEADER} | sed -E 's|\(.+\)|\#include \"\\1\"|' > ${full_out_path}
     BYPRODUCTS ${full_out_path}
-    MAIN_DEPENDENCY ${CMAKE_CURRENT_LIST_DIR}/${LEVEL_HEADER}
+    MAIN_DEPENDENCY ${LEVEL_HEADER}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
 )
 target_sources(level_headers PRIVATE ${full_out_path})
 
@@ -341,8 +336,7 @@ foreach(SKY_SRC ${SKY_SRCS})
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     )
 
-    # Compile and linking to ELF
-
+    # Compile and link ELF
     set(build_in_path ${full_out_path})
     set(out_path ${out_dir}/${file_out}_skybox.elf)
     set(build_out_path ${sky_target_dir}/${out_path})
@@ -359,17 +353,7 @@ foreach(SKY_SRC ${SKY_SRCS})
         RUNTIME_OUTPUT_DIRECTORY ${sky_target_dir}/${out_dir}
     )
     target_link_libraries(${file_out}_skybox PRIVATE sm_n64)
-    target_include_directories(${file_out}_skybox PRIVATE
-        #.
-        include
-        include/libc
-        #build/us
-        #build/us/include
-        #src
-        # prebuild sources
-        # ${CMAKE_CURRENT_BINARY_DIR}/${BUILD_DIR} # textures
-        # ${CMAKE_CURRENT_BINARY_DIR}/${BUILD_DIR}/include # text
-    )
+
     # TODO: check skybox location
     target_link_options(${file_out}_skybox PRIVATE
         -mabi=32
@@ -536,6 +520,7 @@ add_custom_command(
 target_sources(sound PRIVATE ${sound_data_dir}/sound_data.tbl.inc.c)
 
 # generate 00_sound_player.o
+# Could possibly use object library
 add_custom_command(
     OUTPUT ${sound_data_dir}/sequences/00_sound_player.o
     MAIN_DEPENDENCY sound/sequences/00_sound_player.s
@@ -800,7 +785,7 @@ foreach(COMMON_SRC ${COMMON_SRCS})
     # string(REGEX MATCH "(.*)\\.[^.]+$" bin_target ${COMMON_SRC})
     # string(REGEX REPLACE "/" "." bin_target ${COMMON_SRC})
 
-    set(bin_target bin_${file_out})
+    set(bin_target bin.${file_out})
     set(out_dir ${LOCALE}/${file_dir})
     set(out_path ${out_dir}/${file_out}.elf)
     set(build_out_path ${common_target_dir}/${out_path})
@@ -907,7 +892,6 @@ foreach(LEVEL_SRC ${LEVEL_SRCS})
     add_dependencies(${level_target} sky)
     add_dependencies(${level_target} common)
     set_target_properties(${level_target} PROPERTIES
-        PREFIX ""
         OUTPUT_NAME ${file_out}
         SUFFIX ".elf"
         ARCHIVE_OUTPUT_DIRECTORY ${levels_target_dir}/${out_dir}
