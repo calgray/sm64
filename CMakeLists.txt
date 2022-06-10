@@ -34,9 +34,6 @@ file(GLOB_RECURSE C_SRCS RELATIVE ${CMAKE_CURRENT_LIST_DIR}
     src/game/*.c
     sound/*.c
     levels/*.c
-    #actors/common0.c
-    #actors/common1.c
-    #actors/*_geo.c
     actors/*.c
     data/*.c
     bin/*.c
@@ -69,6 +66,35 @@ define_property(SOURCE PROPERTY SEGMENT_ADDRESS
 # Start!
 #########
 
+add_library(sm_n64 INTERFACE)
+# adds -march=vr4300 -mfix=4300 -mtune=vr4300
+target_link_libraries(sm_n64 INTERFACE n64)
+target_compile_options(sm_n64 INTERFACE
+    -nostdinc
+    -mips3
+    -mno-shared
+    -mhard-float
+    -mdivide-breaks
+    -fno-stack-protector
+    -fno-common
+    -fno-zero-initialized-in-bss
+    -fno-PIC
+    -mno-abicalls
+    -fno-strict-aliasing
+    -fno-inline-functions
+    -ffreestanding
+    -fwrapv
+    -Wall
+    -Wextra
+)
+target_compile_definitions(sm_n64 INTERFACE
+    TARGET_N64=1
+    _LANGUAGE_C=1
+    VERSION_US=1
+    F3D_OLD=1
+    NON_MATCHING=1
+    AVOID_UB=1
+)
 
 #####################################
 # preprocess localized text sources
@@ -332,32 +358,7 @@ foreach(SKY_SRC ${SKY_SRCS})
         LIBRARY_OUTPUT_DIRECTORY ${sky_target_dir}/${out_dir}
         RUNTIME_OUTPUT_DIRECTORY ${sky_target_dir}/${out_dir}
     )
-    target_compile_options(${file_out}_skybox PRIVATE
-        -nostdinc
-        -mips3
-        -mno-shared
-        -mhard-float
-        -mdivide-breaks
-        -fno-stack-protector
-        -fno-common
-        -fno-zero-initialized-in-bss
-        -fno-PIC
-        -mno-abicalls
-        -fno-strict-aliasing
-        -fno-inline-functions
-        -ffreestanding
-        -fwrapv
-        -Wall
-        -Wextra
-    )
-    target_compile_definitions(${file_out}_skybox PRIVATE
-        TARGET_N64=1
-        _LANGUAGE_C=1
-        VERSION_US=1
-        F3D_OLD=1
-        NON_MATCHING=1
-        AVOID_UB=1
-    )
+    target_link_libraries(${file_out}_skybox PRIVATE sm_n64)
     target_include_directories(${file_out}_skybox PRIVATE
         #.
         include
@@ -646,32 +647,6 @@ set_target_properties(${animation_target} PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY ${common_target_dir}/${out_dir}
     RUNTIME_OUTPUT_DIRECTORY ${common_target_dir}/${out_dir}
 )
-target_compile_definitions(${animation_target} PRIVATE
-    TARGET_N64=1
-    _LANGUAGE_C=1
-    VERSION_US=1
-    F3D_OLD=1
-    NON_MATCHING=1
-    AVOID_UB=1
-)
-target_compile_options(${animation_target} PRIVATE
-    -nostdinc
-    -mips3
-    -mno-shared
-    -mhard-float
-    -mdivide-breaks
-    -fno-stack-protector
-    -fno-common
-    -fno-zero-initialized-in-bss
-    -fno-PIC
-    -mno-abicalls
-    -fno-strict-aliasing
-    -fno-inline-functions
-    -ffreestanding
-    -fwrapv
-    -Wall
-    -Wextra
-)
 target_include_directories(${animation_target} PRIVATE
     include
     include/libc
@@ -680,7 +655,7 @@ target_include_directories(${animation_target} PRIVATE
     ${CMAKE_CURRENT_BINARY_DIR}/${textures_target_dir}/${LOCALE}
     ${CMAKE_CURRENT_BINARY_DIR}/${text_target_dir}
 )
-target_link_libraries(${animation_target} PRIVATE n64)
+target_link_libraries(${animation_target} PRIVATE sm_n64)
 
 
 ########################
@@ -843,32 +818,6 @@ foreach(COMMON_SRC ${COMMON_SRCS})
         LIBRARY_OUTPUT_DIRECTORY ${common_target_dir}/${out_dir}
         RUNTIME_OUTPUT_DIRECTORY ${common_target_dir}/${out_dir}
     )
-    target_compile_definitions(${bin_target} PRIVATE
-        TARGET_N64=1
-        _LANGUAGE_C=1
-        VERSION_US=1
-        F3D_OLD=1
-        NON_MATCHING=1
-        AVOID_UB=1
-    )
-    target_compile_options(${bin_target} PRIVATE
-        -nostdinc
-        -mips3
-        -mno-shared
-        -mhard-float
-        -mdivide-breaks
-        -fno-stack-protector
-        -fno-common
-        -fno-zero-initialized-in-bss
-        -fno-PIC
-        -mno-abicalls
-        -fno-strict-aliasing
-        -fno-inline-functions
-        -ffreestanding
-        -fwrapv
-        -Wall
-        -Wextra
-    )
     target_include_directories(${bin_target} PRIVATE
         include
         include/libc
@@ -877,7 +826,7 @@ foreach(COMMON_SRC ${COMMON_SRCS})
         ${CMAKE_CURRENT_BINARY_DIR}/${textures_target_dir}/${LOCALE}
         ${CMAKE_CURRENT_BINARY_DIR}/${text_target_dir}
     )
-    target_link_libraries(${bin_target} PRIVATE n64)
+    target_link_libraries(${bin_target} PRIVATE sm_n64)
 
     #lookup file_out
     # execute_process(
@@ -959,32 +908,6 @@ foreach(LEVEL_SRC ${LEVEL_SRCS})
         LIBRARY_OUTPUT_DIRECTORY ${levels_target_dir}/${out_dir}
         RUNTIME_OUTPUT_DIRECTORY ${levels_target_dir}/${out_dir}
     )
-    target_compile_definitions(${level_target} PRIVATE
-        TARGET_N64=1
-        _LANGUAGE_C=1
-        VERSION_US=1
-        F3D_OLD=1
-        NON_MATCHING=1
-        AVOID_UB=1
-    )
-    target_compile_options(${level_target} PRIVATE
-        -nostdinc
-        -mips3
-        -mno-shared
-        -mhard-float
-        -mdivide-breaks
-        -fno-stack-protector
-        -fno-common
-        -fno-zero-initialized-in-bss
-        -fno-PIC
-        -mno-abicalls
-        -fno-strict-aliasing
-        -fno-inline-functions
-        -ffreestanding
-        -fwrapv
-        -Wall
-        -Wextra
-    )
     target_include_directories(${level_target} PRIVATE
         include
         ${CMAKE_CURRENT_BINARY_DIR}/${textures_target_dir}/${LOCALE}
@@ -993,7 +916,7 @@ foreach(LEVEL_SRC ${LEVEL_SRCS})
         src
         .
     )
-    target_link_libraries(${level_target} PRIVATE n64) # adds -march=vr4300 -mfix=4300 -mtune=vr4300
+    target_link_libraries(${level_target} PRIVATE sm_n64)
     
     #if(EXISTS ${CMAKE_CURRENT_LIST_DIR}/${file_dir}/level.yaml)
     execute_process(
@@ -1044,6 +967,70 @@ endforeach()
 
 
 
+# TODO: library hack!
+# add_library(sm64plus::goddard STATIC IMPORTED)
+# set_target_properties(sm64plus::goddard
+#     PROPERTIES
+#     IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/${lib_dir}/${LOCALE}/libgoddard.a
+#     INTERFACE_INCLUDE_DIRECTORIES ${CMAKE_CURRENT_LIST_DIR}/src/goddard
+# )
+
+# add_library(sm64plus::ultra STATIC IMPORTED)
+# set_target_properties(sm64plus::ultra
+#     PROPERTIES
+#     IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/${lib_dir}/${LOCALE}/libultra.a
+#     #INTERFACE_INCLUDE_DIRECTORIES ${CMAKE_CURRENT_LIST_DIR}/include
+# )
+
+###########
+# LibUltra
+###########
+
+file(GLOB_RECURSE ULTRA_SRCS RELATIVE ${CMAKE_CURRENT_LIST_DIR}
+    lib/asm/*.s
+    lib/src/*.c
+)
+add_library(ultra STATIC
+    ${ULTRA_SRCS}
+)
+add_library(sm64plus::ultra ALIAS ultra)
+target_link_libraries(ultra PRIVATE sm_n64)
+add_dependencies(ultra textures)
+target_include_directories(ultra PRIVATE
+    include
+    include/libc
+)
+set_target_properties(ultra PROPERTIES
+    ARCHIVE_OUTPUT_DIRECTORY ${lib_dir}/${LOCALE}
+    LIBRARY_OUTPUT_DIRECTORY ${lib_dir}/${LOCALE}
+    RUNTIME_OUTPUT_DIRECTORY ${lib_dir}/${LOCALE}
+)
+
+##########
+# Goddard
+##########
+
+file(GLOB_RECURSE GODDARD_SRCS RELATIVE ${CMAKE_CURRENT_LIST_DIR}
+    src/goddard/*.c
+)
+add_library(goddard STATIC
+    ${GODDARD_SRCS}
+)
+add_library(sm64plus::goddard ALIAS goddard)
+target_link_libraries(goddard PRIVATE sm_n64)
+add_dependencies(goddard textures)
+target_include_directories(goddard PRIVATE
+    include
+    include/libc
+    ${CMAKE_CURRENT_BINARY_DIR}/${textures_target_dir}/${LOCALE}
+)
+set_target_properties(goddard PROPERTIES
+    ARCHIVE_OUTPUT_DIRECTORY ${lib_dir}/${LOCALE}
+    LIBRARY_OUTPUT_DIRECTORY ${lib_dir}/${LOCALE}
+    RUNTIME_OUTPUT_DIRECTORY ${lib_dir}/${LOCALE}
+)
+
+
 ###########################
 # Generate final project
 ###########################
@@ -1071,7 +1058,7 @@ set_target_properties(${TARGET_NAME} PROPERTIES
     # LIBRARY_OUTPUT_DIRECTORY ${BUILD_DIR}/${LOCALE}
     # RUNTIME_OUTPUT_DIRECTORY ${BUILD_DIR}/${LOCALE}
 )
-target_link_libraries(${TARGET_NAME} PRIVATE n64)
+target_link_libraries(${TARGET_NAME} PRIVATE sm_n64)
 
 target_include_directories(${TARGET_NAME} PRIVATE .)
 target_include_directories(${TARGET_NAME} PUBLIC
@@ -1160,7 +1147,7 @@ set(MOD_FLAGS
     -DF3DEX_GBI_2=1
     -DNAUDIO=1
     -DBUILD_DIR=${BUILD_DIR}
-    -DLIB_DIR=build/us
+    -DLIB_DIR=${lib_dir}/${LOCALE}
     #../../../../../projects/sm64plus/build/${LOCALE}
     -DSM64_TARGET_DIR=${SM64_TARGET_DIR}
     -DBIN_TARGET_DIR=${bin_target_dir}/${LOCALE}
@@ -1198,21 +1185,6 @@ add_custom_command(TARGET ${TARGET_NAME}
     MAIN_DEPENDENCY ${CMAKE_CURRENT_LIST_DIR}/${LD_SCRIPT}
     DEPENDS ${BUILD_DIR}/${BOOT_OBJ}
     BYPRODUCTS ${BUILD_DIR}/${LD_SCRIPT} ${BUILD_DIR}/${LD_SCRIPT}.d
-)
-
-# TODO: library hack!
-add_library(sm64plus::goddard STATIC IMPORTED)
-set_target_properties(sm64plus::goddard
-    PROPERTIES
-    IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/${lib_dir}/${LOCALE}/libgoddard.a
-    INTERFACE_INCLUDE_DIRECTORIES ${CMAKE_CURRENT_LIST_DIR}/src/goddard
-)
-
-add_library(sm64plus::ultra STATIC IMPORTED)
-set_target_properties(sm64plus::ultra
-    PROPERTIES
-    IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/${lib_dir}/${LOCALE}/libultra.a
-    #INTERFACE_INCLUDE_DIRECTORIES ${CMAKE_CURRENT_LIST_DIR}/include
 )
 
 ###########
@@ -1266,6 +1238,12 @@ add_custom_command(TARGET ${TARGET_NAME}
     #COMMAND stat --format='%n: %s bytes' * | grep ${TARGET_NAME}.elf
     BYPRODUCTS ${ROM_NAME} ${BIN_NAME}
     COMMENT "Generating ${ROM_NAME}"
+)
+
+add_custom_command(TARGET ${TARGET_NAME}
+    POST_BUILD
+    COMMAND python first-diff.py
+    WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
 )
 
 #################
