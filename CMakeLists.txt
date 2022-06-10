@@ -435,7 +435,9 @@ endforeach()
 #####################
 # Generate sounds
 #####################
+add_custom_target(sound_tables)
 add_custom_target(sound)
+add_dependencies(sound sound_tables)
 file(GLOB_RECURSE SOUND_SAMPLES RELATIVE ${CMAKE_CURRENT_LIST_DIR} sound/*.aiff)
 foreach(SOUND_SAMPLE ${SOUND_SAMPLES})
     cmake_path(GET SOUND_SAMPLE PARENT_PATH file_dir)
@@ -454,6 +456,8 @@ foreach(SOUND_SAMPLE ${SOUND_SAMPLES})
         > ${build_out_path}
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     )
+    target_sources(sound_tables PRIVATE ${full_out_path})
+
     # Encode ADPCM
     set(build_in_path ${full_out_path})
     set(out_path ${out_dir}/${file_out}.aifc)
@@ -462,6 +466,7 @@ foreach(SOUND_SAMPLE ${SOUND_SAMPLES})
     add_custom_command(
         OUTPUT ${full_out_path}
         MAIN_DEPENDENCY ${build_in_path}
+        DEPENDS sound_tables
         COMMENT "Encoding ADPCM to ${sound_target_dir}/${out_path}"
         COMMAND ${TOOLS_DIR}/vadpcm_enc
         -c ${build_in_path}
@@ -505,9 +510,9 @@ add_custom_command(
         ${sound_data_dir}/sound_data.tbl
         ${sound_data_dir}/tbl_header
         -DVERSION_US=1
-        -DF3D_OLD=1
-        -DNON_MATCHING=1
-        -DAVOID_UB=1
+        #-DF3D_OLD=1
+        #-DNON_MATCHING=1
+        #-DAVOID_UB=1
         $$\(cat ${CMAKE_CURRENT_BINARY_DIR}/${sound_target_dir}/${LOCALE}/${sound_flags_target}.txt\)
     WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
 )
@@ -517,7 +522,7 @@ add_custom_command(
     OUTPUT ${sound_data_dir}/sound_data.ctl.inc.c
     MAIN_DEPENDENCY ${sound_data_dir}/sound_data.ctl
     COMMAND
-    hexdump -v -e '1/1 \"0x%X,\"' ${sound_data_dir}/sound_data.ctl > ${sound_data_dir}/sound_data.ctl.inc.c
+        hexdump -v -e '1/1 \"0x%X,\"' ${sound_data_dir}/sound_data.ctl > ${sound_data_dir}/sound_data.ctl.inc.c
 )
 target_sources(sound PRIVATE ${sound_data_dir}/sound_data.ctl.inc.c)
 
@@ -526,7 +531,7 @@ add_custom_command(
     OUTPUT ${sound_data_dir}/sound_data.tbl.inc.c
     MAIN_DEPENDENCY ${sound_data_dir}/sound_data.tbl
     COMMAND
-    hexdump -v -e '1/1 \"0x%X,\"' ${sound_data_dir}/sound_data.tbl > ${sound_data_dir}/sound_data.tbl.inc.c
+        hexdump -v -e '1/1 \"0x%X,\"' ${sound_data_dir}/sound_data.tbl > ${sound_data_dir}/sound_data.tbl.inc.c
 )
 target_sources(sound PRIVATE ${sound_data_dir}/sound_data.tbl.inc.c)
 
@@ -560,6 +565,7 @@ add_custom_command(
         -O binary ${sound_data_dir}/sequences/00_sound_player.m64
     WORKING_DIRECTORY ${CMAKE_CURRENT_BIN_DIR}
 )
+
 #target_sources(sound PRIVATE ${sound_data_dir}/sequences/00_sound_player.m64)
 
 # generate sequences.bin
@@ -584,23 +590,23 @@ add_custom_command(
     WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
 )
 
-# generate BIN inc.c
-add_custom_command(
-    OUTPUT ${sound_data_dir}/sequences.bin.inc.c
-    MAIN_DEPENDENCY ${sound_data_dir}/sequences.bin
-    COMMAND
-    hexdump -v -e '1/1 \"0x%X,\"' ${sound_data_dir}/sequences.bin > ${sound_data_dir}/sequences.bin.inc.c
-)
-target_sources(sound PRIVATE ${sound_data_dir}/sequences.bin.inc.c)
+# # generate BIN inc.c
+# add_custom_command(
+#     OUTPUT ${sound_data_dir}/sequences.bin.inc.c
+#     MAIN_DEPENDENCY ${sound_data_dir}/sequences.bin
+#     COMMAND
+#     hexdump -v -e '1/1 \"0x%X,\"' ${sound_data_dir}/sequences.bin > ${sound_data_dir}/sequences.bin.inc.c
+# )
+# target_sources(sound PRIVATE ${sound_data_dir}/sequences.bin.inc.c)
 
-# generate bank_sets inc.c
-add_custom_command(
-    OUTPUT ${sound_data_dir}/bank_sets.inc.c
-    MAIN_DEPENDENCY ${sound_data_dir}/bank_sets
-    COMMAND
-    hexdump -v -e '1/1 \"0x%X,\"' ${sound_data_dir}/bank_sets > ${sound_data_dir}/bank_sets.inc.c
-)
-target_sources(sound PRIVATE ${sound_data_dir}/bank_sets.inc.c)
+# # generate bank_sets inc.c
+# add_custom_command(
+#     OUTPUT ${sound_data_dir}/bank_sets.inc.c
+#     MAIN_DEPENDENCY ${sound_data_dir}/bank_sets
+#     COMMAND
+#     hexdump -v -e '1/1 \"0x%X,\"' ${sound_data_dir}/bank_sets > ${sound_data_dir}/bank_sets.inc.c
+# )
+# target_sources(sound PRIVATE ${sound_data_dir}/bank_sets.inc.c)
 
 ######################
 # Generate animations
