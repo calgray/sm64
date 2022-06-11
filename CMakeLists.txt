@@ -55,6 +55,96 @@ define_property(SOURCE PROPERTY SEGMENT_ADDRESS
     FULL_DOCS "segment location to load to"
 )
 
+set(CMAKE_SHARED_LIBRARY_LINK_C_FLAGS "")
+set(CMAKE_SHARED_LIBRARY_LINK_CXX_FLAGS "")
+set(SEG_FILES "")
+
+
+###################
+# Functions
+###################
+function(add_mio0 TARGET SRC OUT_DIR SEG_FILE)
+    cmake_path(GET SRC PARENT_PATH file_dir)
+    cmake_path(GET SRC STEM LAST_ONLY file_out)
+
+    # Compile and link ELF
+    set(out_file ${TARGET}.elf)
+    set(build_out_path ${OUT_DIR}/${out_file})
+    add_executable(${TARGET}
+        ${SRC}
+    )
+    set_target_properties(${TARGET} PROPERTIES
+        PREFIX ""
+        OUTPUT_NAME ${TARGET}
+        SUFFIX ".elf"
+        ARCHIVE_OUTPUT_DIRECTORY ${OUT_DIR}
+        LIBRARY_OUTPUT_DIRECTORY ${OUT_DIR}
+        RUNTIME_OUTPUT_DIRECTORY ${OUT_DIR}
+        #TODO! this adds -rdynamic but is not supported for mips64-elf-gcc
+        ENABLE_EXPORTS TRUE
+    )
+    target_link_libraries(${TARGET} PRIVATE sm_n64)
+    target_link_options(${TARGET} PRIVATE
+        -mabi=32
+        -nostdlib
+        -e 0
+        -Ttext=0x0A000000
+        -Wl,-Map,${OUT_DIR}/${TARGET}.elf.map
+    )
+    set(${SEG_FILE} ${CMAKE_CURRENT_BINARY_DIR}/${build_out_path} PARENT_SCOPE)
+
+    # Extracting Compressible Data
+    set(build_in_path ${build_out_path})
+    set(out_file ${TARGET}.bin)
+    set(build_out_path ${OUT_DIR}/${out_file})
+    add_custom_command(TARGET ${TARGET}
+        POST_BUILD
+        COMMENT "Extracting Compressible data to ${build_out_path}"
+        COMMAND
+            ${CMAKE_OBJCOPY}
+            -O binary
+            --only-section=.data
+            ${build_in_path}
+            ${build_out_path}
+        BYPRODUCTS ${CMAKE_CURRENT_BINARY_DIR}/${build_out_path}
+        MAIN_DEPENDENCY $${full_in_path}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    )
+
+    # Compressing
+    set(build_in_path ${build_out_path})
+    set(out_file ${TARGET}.mio0)
+    set(build_out_path ${OUT_DIR}/${out_file})
+    add_custom_command(TARGET ${TARGET}
+        POST_BUILD
+        COMMENT "Compressing to ${build_out_path}"
+        COMMAND
+            ${TOOLS_DIR}/mio0
+            ${build_in_path}
+            ${build_out_path}
+        BYPRODUCTS ${CMAKE_CURRENT_BINARY_DIR}/${build_out_path}
+        MAIN_DEPENDENCY $${build_in_path}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    )
+
+    # Converting MIO0 to ELF
+    set(build_in_path ${build_out_path})
+    set(out_file ${TARGET}.mio0.o)
+    set(build_out_path ${OUT_DIR}/${out_file})
+    add_custom_command(TARGET ${TARGET}
+        POST_BUILD
+        COMMENT "Converting to ${build_out_path}"
+        COMMAND
+            mips64-elf-ld -r -b binary
+            ${build_in_path} 
+            -o ${build_out_path}
+        BYPRODUCTS ${CMAKE_CURRENT_BINARY_DIR}/${build_out_path}
+        MAIN_DEPENDENCY ${CMAKE_CURRENT_BINARY_DIR}/${build_in_path}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    )
+endfunction()
+
+
 #########
 # Start!
 #########
@@ -101,7 +191,7 @@ set(TEXT_SRCS
     text/define_text.inc.c
 )
 
-# WARNING!!! custom output dir must start with either _,a,b,c,d,e,f,g,h,i,j,k,l,m,n,o
+# WARNING!!! custom output dir must start with either _,a,b,c,d,e,f,g,h,i,j,k,l,m,n,o?
 add_custom_target(localized_text)
 # TODO!!! WORKING_DIRECTORY ${text_target_dir})
 foreach(TEXT_SRC ${TEXT_SRCS})
@@ -154,7 +244,7 @@ foreach(TEXT_HEADER ${TEXT_HEADERS})
     cmake_path(GET TEXT_HEADER STEM LAST_ONLY file_out)
     set(out_dir ${LOCALE}/${file_dir})
 
-    set(out_path ${out_dir}/${file_out}) # e.g. us/include/text_strings.h
+    set(out_path ${out_dir}/${file_out})
     set(build_out_path ${text_target_dir}/${out_path})
     set(full_out_path ${CMAKE_CURRENT_BINARY_DIR}/${build_out_path})
 
@@ -242,15 +332,16 @@ foreach(IMAGE_SRC ${IMAGE_SRCS})
     list(REVERSE file_exts)
     list(GET file_exts 1 file_type)
     string(REGEX MATCH "[^.]*$" file_type ${file_type}) # e.g. rgba16
-    # Use raw for fonts
+
     if(file_type STREQUAL "ia1")
+        # Use raw for fonts
         set(scheme raw)
         set(out_ext "")
     else()
         set(scheme ${TEXTURE_ENCODING})
         set(out_ext .inc.c)
     endif()
-    
+
     set(out_dir ${LOCALE}/${file_dir})
     set(out_path ${out_dir}/${file_out}${out_ext}) # e.g. us/textures/cave/hmc_textures.00000.rgba16.inc.c
     set(build_out_path ${textures_target_dir}/${out_path})
@@ -281,27 +372,26 @@ endforeach()
 # add_dependencies(${TARGET_NAME} images)
 
 
-######################
-# generate skyboxes
-######################
+###########################
+# generate cake + skyboxes
+###########################
 add_custom_target(sky)
+
 # Cake
 set(CAKE_SRC levels/ending/cake.png)
-set(out_dir ${LOCALE}/levels/ending)
-set(out_path ${out_dir}/cake.inc.c)
-set(build_out_path ${sky_target_dir}/${out_path})
-set(full_out_path ${CMAKE_CURRENT_BINARY_DIR}/${build_out_path})
+set(build_dir ${sky_target_dir}/${LOCALE}/levels/ending)
+set(build_out_path ${build_dir}/cake.inc.c)
 add_custom_command(
     OUTPUT ${full_out_path}
-    COMMENT "Generating ${sky_target_dir}/${out_path}"
-    COMMAND mkdir -p ${sky_target_dir}/${out_dir}
+    COMMENT "Generating ${build_out_path}"
+    COMMAND mkdir -p ${build_dir}
     COMMAND ${TOOLS_DIR}/skyconv
     --type cake
     --split ${CMAKE_CURRENT_LIST_DIR}/${CAKE_SRC}
-    ${sky_target_dir}/${out_dir}
+    ${build_dir}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
-target_sources(sky PRIVATE ${full_out_path})
+target_sources(sky PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/${build_out_path})
 
 # skyboxes
 set(SKY_SRCS
@@ -317,104 +407,32 @@ set(SKY_SRCS
     textures/skyboxes/wdw.png
 )
 
+# elf files must be made with add_executable but must later have symbols ignored
 foreach(SKY_SRC ${SKY_SRCS})
     cmake_path(GET SKY_SRC PARENT_PATH file_dir)
-    cmake_path(GET SKY_SRC STEM LAST_ONLY file_out)
-    set(out_dir ${LOCALE}/bin)
+    cmake_path(GET SKY_SRC STEM LAST_ONLY file_name)
+
     #Split
-    set(out_path ${out_dir}/${file_out}_skybox.c)
-    set(build_out_path ${sky_target_dir}/${out_path})
-    set(full_out_path ${CMAKE_CURRENT_BINARY_DIR}/${build_out_path})
+    set(out_file ${file_name}_skybox.c)
+    set(build_dir ${sky_target_dir}/${LOCALE}/bin)
+    set(build_out_path ${build_dir}/${out_file})
     add_custom_command(
-        OUTPUT ${full_out_path}
-        COMMENT "Splitting ${SKY_SRC} -> ${sky_target_dir}/${out_path}"
-        COMMAND mkdir -p ${sky_target_dir}/${out_dir}
+        OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${build_out_path}
+        COMMENT "Splitting ${SKY_SRC} -> ${build_out_path}"
+        COMMAND mkdir -p ${build_dir}
         COMMAND ${TOOLS_DIR}/skyconv
         --type sky
         --split ${CMAKE_CURRENT_LIST_DIR}/${SKY_SRC}
-        ${sky_target_dir}/${out_dir}
+        ${build_dir}
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     )
 
-    # Compile and link ELF
-    set(build_in_path ${full_out_path})
-    set(out_path ${out_dir}/${file_out}_skybox.elf)
-    set(build_out_path ${sky_target_dir}/${out_path})
-    set(full_out_path ${CMAKE_CURRENT_BINARY_DIR}/${build_out_path})
-    add_executable(${file_out}_skybox
-        ${build_in_path}
-    )
-    set_target_properties(${file_out}_skybox PROPERTIES
-        PREFIX ""
-        OUTPUT_NAME ${file_out}_skybox
-        SUFFIX ".elf"
-        ARCHIVE_OUTPUT_DIRECTORY ${sky_target_dir}/${out_dir}
-        LIBRARY_OUTPUT_DIRECTORY ${sky_target_dir}/${out_dir}
-        RUNTIME_OUTPUT_DIRECTORY ${sky_target_dir}/${out_dir}
-    )
-    target_link_libraries(${file_out}_skybox PRIVATE sm_n64)
-
-    # TODO: check skybox location
-    target_link_options(${file_out}_skybox PRIVATE
-        -mabi=32
-        -nostdlib
-        -e 0
-        -Ttext=0x0A000000
-        -Wl,-Map,${sky_target_dir}/${out_dir}/${file_out}_skybox.elf.map
-    )
-    list(APPEND SEG_FILES ${full_out_path})
-
-    # Extracting Compressible Data
-    set(build_in_path ${sky_target_dir}/${out_dir}/${file_out}_skybox.elf)
-    set(out_path ${out_dir}/${file_out}_skybox.bin)
-    set(build_out_path ${sky_target_dir}/${out_path})
-    set(full_out_path ${CMAKE_CURRENT_BINARY_DIR}/${build_out_path})
-    add_custom_command(TARGET ${file_out}_skybox POST_BUILD
-        #OUTPUT ${full_out_path}
-        COMMENT "Extracting Compressible data to ${sky_target_dir}/${out_path}"
-        COMMAND
-            ${CMAKE_OBJCOPY}
-            -O binary
-            --only-section=.data
-            ${build_in_path}
-            ${build_out_path}
-        BYPRODUCTS ${full_out_path}
-        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-    )
-    # Compressing
-    set(build_in_path ${sky_target_dir}/${out_dir}/${file_out}_skybox.bin)
-    set(out_path ${out_dir}/${file_out}_skybox.mio0)
-    set(build_out_path ${sky_target_dir}/${out_path})
-    set(full_out_path ${CMAKE_CURRENT_BINARY_DIR}/${build_out_path})
-    add_custom_command(TARGET ${file_out}_skybox POST_BUILD
-        COMMENT "Compressing to ${sky_target_dir}/${out_path}"
-        COMMAND
-            ${TOOLS_DIR}/mio0
-            ${build_in_path}
-            ${build_out_path}
-        BYPRODUCTS ${full_out_path}
-        MAIN_DEPENDENCY ${CMAKE_CURRENT_BINARY_DIR}/${build_in_path}
-        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-    )
-    # Converting MIO0 to ELF
-    set(build_in_path ${sky_target_dir}/${out_dir}/${file_out}_skybox.mio0)
-    set(out_path ${out_dir}/${file_out}_skybox.mio0.o)
-    set(build_out_path ${sky_target_dir}/${out_path})
-    set(full_out_path ${CMAKE_CURRENT_BINARY_DIR}/${build_out_path})
-    add_custom_command(TARGET ${file_out}_skybox POST_BUILD
-        COMMENT "Converting to ${sky_target_dir}/${out_path}"
-        COMMAND
-            mips64-elf-ld -r -b binary
-            ${build_in_path} 
-            -o ${build_out_path}
-        BYPRODUCTS ${full_out_path}
-        MAIN_DEPENDENCY ${CMAKE_CURRENT_BINARY_DIR}/${build_in_path}
-        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-    )
-
-    #target_sources(sky PRIVATE ${full_out_path})
-    add_dependencies(sky ${file_out}_skybox)
+    set(sky_target ${file_name}_skybox) # _skybox suffix used by skyconv
+    add_mio0(${sky_target} ${CMAKE_CURRENT_BINARY_DIR}/${build_out_path} ${sky_target_dir}/${LOCALE}/bin SEG_FILE)
+    list(APPEND SEG_FILES ${SEG_FILE})
+    add_dependencies(sky ${sky_target})
 endforeach()
+
 
 #####################
 # Generate sounds
@@ -576,22 +594,22 @@ add_custom_command(
 )
 
 # # generate BIN inc.c
-# add_custom_command(
-#     OUTPUT ${sound_data_dir}/sequences.bin.inc.c
-#     MAIN_DEPENDENCY ${sound_data_dir}/sequences.bin
-#     COMMAND
-#     hexdump -v -e '1/1 \"0x%X,\"' ${sound_data_dir}/sequences.bin > ${sound_data_dir}/sequences.bin.inc.c
-# )
-# target_sources(sound PRIVATE ${sound_data_dir}/sequences.bin.inc.c)
+add_custom_command(
+    OUTPUT ${sound_data_dir}/sequences.bin.inc.c
+    MAIN_DEPENDENCY ${sound_data_dir}/sequences.bin
+    COMMAND
+    hexdump -v -e '1/1 \"0x%X,\"' ${sound_data_dir}/sequences.bin > ${sound_data_dir}/sequences.bin.inc.c
+)
+target_sources(sound PRIVATE ${sound_data_dir}/sequences.bin.inc.c)
 
-# # generate bank_sets inc.c
-# add_custom_command(
-#     OUTPUT ${sound_data_dir}/bank_sets.inc.c
-#     MAIN_DEPENDENCY ${sound_data_dir}/bank_sets
-#     COMMAND
-#     hexdump -v -e '1/1 \"0x%X,\"' ${sound_data_dir}/bank_sets > ${sound_data_dir}/bank_sets.inc.c
-# )
-# target_sources(sound PRIVATE ${sound_data_dir}/bank_sets.inc.c)
+# generate bank_sets inc.c
+add_custom_command(
+    OUTPUT ${sound_data_dir}/bank_sets.inc.c
+    MAIN_DEPENDENCY ${sound_data_dir}/bank_sets
+    COMMAND
+    hexdump -v -e '1/1 \"0x%X,\"' ${sound_data_dir}/bank_sets > ${sound_data_dir}/bank_sets.inc.c
+)
+target_sources(sound PRIVATE ${sound_data_dir}/bank_sets.inc.c)
 
 ######################
 # Generate animations
@@ -1029,6 +1047,7 @@ add_executable(${TARGET_NAME}
     ${C_SRCS}
     ${CPP_SRCS}
 )
+set_target_properties(${TARGET_NAME} PROPERTIES ENABLE_EXPORTS TRUE)
 add_dependencies(${TARGET_NAME}
     localized_text
     textures
@@ -1040,6 +1059,7 @@ add_dependencies(${TARGET_NAME}
     common
     levels
 )
+target_link_libraries(${TARGET_NAME} PRIVATE sm_n64)
 
 set_target_properties(${TARGET_NAME} PROPERTIES
     OUTPUT_NAME "${TARGET_NAME}"
@@ -1048,7 +1068,7 @@ set_target_properties(${TARGET_NAME} PROPERTIES
     # LIBRARY_OUTPUT_DIRECTORY ${BUILD_DIR}/${LOCALE}
     # RUNTIME_OUTPUT_DIRECTORY ${BUILD_DIR}/${LOCALE}
 )
-target_link_libraries(${TARGET_NAME} PRIVATE sm_n64)
+
 
 target_include_directories(${TARGET_NAME} PRIVATE .)
 target_include_directories(${TARGET_NAME} PUBLIC
@@ -1080,37 +1100,8 @@ target_compile_definitions(${TARGET_NAME} PUBLIC
     # MAXWIDTH=320
     # MAXHEIGHT=240
     # _FORTIFY_SOURCE=2
-    # NON_MATCHING=1
-    # AVOID_UB=1
-    # VERSION_US=1
-
-
-    TARGET_N64=1
-    _LANGUAGE_C=1
-    VERSION_US=1
-    F3D_OLD=1
-    NON_MATCHING=1
-    AVOID_UB=1
 )
-
-target_compile_options(${TARGET_NAME} PUBLIC
-    -nostdinc
-    -mips3
-    -mno-shared
-    -mhard-float
-    -mdivide-breaks
-    -fno-stack-protector
-    -fno-common
-    -fno-zero-initialized-in-bss
-    -fno-PIC
-    -mno-abicalls
-    -fno-strict-aliasing
-    -fno-inline-functions
-    -ffreestanding
-    -fwrapv
-    -Wall
-    -Wextra
-)
+#target_compile_options(-fpermissive)
 
 ###################
 # build boot object
@@ -1144,7 +1135,6 @@ set(MOD_FLAGS
     -DANIM_TARGET_DIR=${animation_target_dir}/${LOCALE}
     #-DLEVELS_TARGET_DIR=${levels_target_dir}/${LOCALE}
     # TODO!!!
-    # linker script expects mio0.o for levels, skybox, and common in the same dir
     -DN64SDK_DIR=${N64SDK_DIR}
     -MMD -MP
 )
@@ -1163,8 +1153,7 @@ set(MOD_INCLUDES
 )
 add_custom_command(TARGET ${TARGET_NAME}
     PRE_LINK
-    COMMAND ${CMAKE_C_PREPROCESSOR} -P -Wno-trigraphs
-        -undef
+    COMMAND ${CMAKE_C_PREPROCESSOR} -P -Wno-trigraphs -undef
         ${MOD_INCLUDES}
         ${MOD_FLAGS}
         -MT ${BUILD_DIR}/${LD_SCRIPT}
@@ -1175,13 +1164,21 @@ add_custom_command(TARGET ${TARGET_NAME}
     MAIN_DEPENDENCY ${CMAKE_CURRENT_LIST_DIR}/${LD_SCRIPT}
     DEPENDS ${BUILD_DIR}/${BOOT_OBJ}
     BYPRODUCTS ${BUILD_DIR}/${LD_SCRIPT} ${BUILD_DIR}/${LD_SCRIPT}.d
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
 
 ###########
 # LINKING
 ###########
-list(TRANSFORM SEG_FILES PREPEND "-R,")
-list(JOIN SEG_FILES , GCC_LDFLAGS)
+set(GCC_SEGARGS ${SEG_FILES})
+list(TRANSFORM GCC_SEGARGS PREPEND "-R,")
+list(JOIN GCC_SEGARGS "," GCC_LDFLAGS)
+
+#foreach(SEG_FILE ${SEG_FILES})
+#    list(APPEND GCC_LDFLAGS -R)
+#    list(APPEND GCC_LDFLAGS ${SEG_FILE})
+#endforeach()
+
 target_link_options(${TARGET_NAME} PRIVATE
     -mabi=32
     -nostdlib
