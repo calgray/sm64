@@ -9,7 +9,6 @@ shared-path: [["/areas/1/", "/double_arrows/"], ["/areas/2/", "/double_arrows/"]
 # loaded files
 skybox-bin: wdw
 texture-bin: grass
-texture-address: 0x09000000
 effects: false
 actor-bins: [group1, group13]
 common-bin: [common0]

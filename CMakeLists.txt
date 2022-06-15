@@ -974,22 +974,6 @@ foreach(LEVEL_SRC ${LEVEL_SRCS})
 endforeach()
 
 
-
-# TODO: library hack!
-# add_library(sm64plus::goddard STATIC IMPORTED)
-# set_target_properties(sm64plus::goddard
-#     PROPERTIES
-#     IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/${lib_dir}/${LOCALE}/libgoddard.a
-#     INTERFACE_INCLUDE_DIRECTORIES ${CMAKE_CURRENT_LIST_DIR}/src/goddard
-# )
-
-# add_library(sm64plus::ultra STATIC IMPORTED)
-# set_target_properties(sm64plus::ultra
-#     PROPERTIES
-#     IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/${lib_dir}/${LOCALE}/libultra.a
-#     #INTERFACE_INCLUDE_DIRECTORIES ${CMAKE_CURRENT_LIST_DIR}/include
-# )
-
 ###########
 # LibUltra
 ###########
@@ -1093,32 +1077,6 @@ target_include_directories(${TARGET_NAME} PUBLIC
     ${CMAKE_CURRENT_BINARY_DIR}/${rsp_target_dir}/${LOCALE} # rsp
     ${CMAKE_CURRENT_BINARY_DIR}/${common_target_dir}/${LOCALE} # common
 )
-target_compile_definitions(${TARGET_NAME} PUBLIC 
-    #_FINALROM=1
-    #F3DEX_GBI_2=1
-    #N_AUDIO=1
-    # MAXWIDTH=320
-    # MAXHEIGHT=240
-    # _FORTIFY_SOURCE=2
-)
-#target_compile_options(-fpermissive)
-
-###################
-# build boot object
-###################
-# add_custom_command(TARGET ${TARGET_NAME}
-#     PRE_BUILD
-#     COMMAND ${CMAKE_OBJCOPY}
-#     -I binary
-#     -B mips
-#     -O elf32-bigmips
-#     ${BOOT_SRC}
-#     ${BUILD_DIR}/${BOOT_OBJ}
-#     COMMENT "generating boot object ${BUILD_DIR}/${BOOT_OBJ}"
-#     MAIN_DEPENDENCY ${BOOT_SRC}
-#     BYPRODUCTS ${BUILD_DIR}/${BOOT_OBJ}
-# )
-
 
 #####################
 # build linker script with gcc preprocessor
@@ -1194,22 +1152,8 @@ target_link_directories(${TARGET_NAME}
 )
 # order specific
 target_link_libraries(${TARGET_NAME} PRIVATE
-    #n64sdkmod::nualstl
-    #n64sdkmod::mus
-    #n64sdkmod::nualstl_n
-    #n64sdkmod::n_mus
-    #n64sdkmod::n_audio_sc
-    # n64sdkmod::nualsgi_n
-    #n64sdkmod::hvq
-    #n64sdkmod::nustd
-    #n64sdkmod::nusys
-    # n64sdkmod::nusys_d
-    # n64sdkmod::n_audio
-    
-    #n64sdkmod::ultra_rom # TODO: remove -isystem
     sm64plus::goddard
     sm64plus::ultra
-    # TODO!!! .ld needs to know exact goddard and ultra location
     #gcc
 )
 
@@ -1227,11 +1171,12 @@ add_custom_command(TARGET ${TARGET_NAME}
     COMMENT "Generating ${ROM_NAME}"
 )
 
-add_custom_command(TARGET ${TARGET_NAME}
-    POST_BUILD
-    COMMAND python first-diff.py
-    WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
-)
+# add_custom_command(TARGET ${TARGET_NAME}
+#     POST_BUILD
+#     COMMAND
+#         sha1sum --check ${TARGET_NAME}.gcc.sha1
+#     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+# )
 
 #################
 # Common Failures
@@ -1240,4 +1185,4 @@ add_custom_command(TARGET ${TARGET_NAME}
 # - missing "-x assembler-with-cpp" on assembling asm objects
 
 # defined in discarded section .rodata*
-# - 
+# - gcc may expect extra values in the linkerscript yet produces same binary output

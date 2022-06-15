@@ -8,7 +8,6 @@ shared-path: []
 # loaded files
 skybox-bin: bitfs
 texture-bin: fire
-texture-address: 0x09000000
 effects: true
 actor-bins: [group12]
 common-bin: []

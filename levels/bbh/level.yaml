@@ -8,7 +8,6 @@ shared-path: []
 # loaded files
 skybox-bin: bbh
 texture-bin: spooky
-texture-address: 0x09000000
 effects: false
 actor-bins: [group9, group17]
 common-bin: [common0]

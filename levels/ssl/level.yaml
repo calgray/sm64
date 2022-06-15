@@ -8,7 +8,6 @@ shared-path: []
 # loaded files
 skybox-bin: ssl
 texture-bin: generic
-texture-address: 0x07000000
 effects: false
 actor-bins: [group5]
 common-bin: [common0]

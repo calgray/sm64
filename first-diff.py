@@ -57,6 +57,12 @@ parser.add_argument(
 parser.add_argument(
     "-d", "--diff", action="store_true", help="run ./diff.py on the result"
 )
+parser.add_argument(
+    "-g", "--imgdir", type=str, default = None
+)
+parser.add_argument(
+    "-p", "--mapdir", type=str, default = None
+)
 args = parser.parse_args()
 diff_count = args.count
 
@@ -78,14 +84,14 @@ if version is None:
 if args.make:
     check_call(["make", "-j4", "VERSION=" + version, "COMPARE=0"])
 
+imgdir = args.imgdir if args.imgdir else f"build/{version}"
+mapdir = args.mapdir if args.mapdir else f"build/{version}"
+
 baseimg = f"baserom.{version}.z64"
 basemap = f"sm64.{version}.map"
 
-#myimg = f"build/{version}/sm64.{version}.z64"
-#mymap = f"build/{version}/{basemap}"
-
-myimg = f"../../build/arch-mips64-elf-n64sdkmod/FLASHCART-Release/projects/sm64plus/sm64.{version}.z64"
-mymap = f"../../build/arch-mips64-elf-n64sdkmod/FLASHCART-Release/projects/sm64plus/CMakeFiles/sm64.us.dir/{basemap}"
+myimg = f"{imgdir}/sm64.{version}.z64"
+mymap = f"{mapdir}/{basemap}"
 
 if os.path.isfile("expected/" + mymap):
     basemap = "expected/" + mymap
