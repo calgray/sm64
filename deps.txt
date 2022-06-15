@@ -1,0 +1,9 @@
+levels   .in      ->   bin.mio0.o         ->    leveldata.mio0.o -> sm64
+text     .inc.c        actors.mio0.o
+textures .inc.c
+levels   .inc.c
+actors   .inc.c
+skybox   .mio0.o
+cake     .mio0.o
+ultra64.a
+goddard.a

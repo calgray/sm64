@@ -8,6 +8,7 @@ shared-path: []
 # loaded files
 skybox-bin: clouds
 texture-bin: water
+texture-address: 0x09000000
 effects: true
 actor-bins: [group4, group13]
 common-bin: [common0]

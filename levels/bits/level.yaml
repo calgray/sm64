@@ -8,6 +8,7 @@ shared-path: []
 # loaded files
 skybox-bin: bits
 texture-bin: sky
+texture-address: 0x09000000
 effects: false
 actor-bins: [group14]
 common-bin: [common0]

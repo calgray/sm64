@@ -8,6 +8,7 @@ shared-path: []
 # loaded files
 skybox-bin: ccm
 texture-bin: snow
+texture-address: 0x09000000
 effects: true
 actor-bins: [group7, group16]
 common-bin: [common0]

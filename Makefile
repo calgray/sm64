@@ -23,7 +23,7 @@ TARGET_N64 ?= 1
 #   ido - uses the SGI IRIS Development Option compiler, which is used to build
 #         an original matching N64 ROM
 #   gcc - uses the GNU C Compiler
-COMPILER ?= ido
+COMPILER ?= gcc
 $(eval $(call validate-option,COMPILER,ido gcc))
 
 
@@ -132,6 +132,8 @@ TARGET_STRING := sm64.$(VERSION).$(GRUCODE)
 ifeq ($(filter $(TARGET_STRING), sm64.jp.f3d_old sm64.us.f3d_old sm64.eu.f3d_new sm64.sh.f3d_new),)
   COMPARE := 0
 endif
+
+COMPARE := 1
 
 # Whether to hide commands or not
 VERBOSE ?= 0
@@ -328,7 +330,12 @@ ifneq (,$(call find-command,clang))
   CPPFLAGS := -E -P -x c -Wno-trigraphs $(DEF_INC_CFLAGS)
 else
   CPP      := cpp
-  CPPFLAGS := -P -Wno-trigraphs $(DEF_INC_CFLAGS)
+  CPPFLAGS := -P -Wno-trigraphs -undef $(DEF_INC_CFLAGS)
+endif
+
+ifeq ($(COMPILER),gcc)
+CPP      := $(CROSS)cpp
+CPPFLAGS := -P -Wno-trigraphs -undef $(DEF_INC_CFLAGS)
 endif
 
 # Check code syntax with host compiler
@@ -343,7 +350,7 @@ else
   CFLAGS += -non_shared -Wab,-r4300_mul -Xcpluscomm -Xfullwarn -signed -32
 endif
 
-ASFLAGS     := -march=vr4300 -mabi=32 $(foreach i,$(INCLUDE_DIRS),-I$(i)) $(foreach d,$(DEFINES),--defsym $(d))
+ASFLAGS     := -march=vr4300 -mabi=32 $(foreach i,$(INCLUDE_DIRS),-I$(i)) $(foreach d,$(DEFINES),-D$(d))
 RSPASMFLAGS := $(foreach d,$(DEFINES),-definelabel $(subst =, ,$(d)))
 
 ifeq ($(shell getconf LONG_BIT), 32)
@@ -411,7 +418,11 @@ endef
 all: $(ROM)
 ifeq ($(COMPARE),1)
 	@$(PRINT) "$(GREEN)Checking if ROM matches.. $(NO_COL)\n"
+  ifeq ($(COMPILER),ido)
 	@$(SHA1SUM) --quiet -c $(TARGET).sha1 && $(PRINT) "$(TARGET): $(GREEN)OK$(NO_COL)\n" || ($(PRINT) "$(YELLOW)Building the ROM file has succeeded, but does not match the original ROM.\nThis is expected, and not an error, if you are making modifications.\nTo silence this message, use 'make COMPARE=0.' $(NO_COL)\n" && false)
+  else
+	@$(SHA1SUM) --quiet -c $(TARGET).gcc.sha1 && $(PRINT) "$(TARGET): $(GREEN)OK$(NO_COL)\n" || ($(PRINT) "$(YELLOW)Building the ROM file has succeeded, but does not match the original ROM.\nThis is expected, and not an error, if you are making modifications.\nTo silence this message, use 'make COMPARE=0.' $(NO_COL)\n" && false)
+  endif
 endif
 
 clean:
@@ -513,12 +524,18 @@ $(BUILD_DIR)/%.ci4: %.ci4.png
 # TODO: ideally this would be `-Trodata-segment=0x07000000` but that doesn't set the address
 $(BUILD_DIR)/%.elf: $(BUILD_DIR)/%.o
 	$(call print,Linking ELF file:,$<,$@)
-	$(V)$(LD) -e 0 -Ttext=$(SEGMENT_ADDRESS) -Map $@.map -o $@ $<
+	$(V)$(CC) -mabi=32 -nostdlib -e 0 -Ttext=$(SEGMENT_ADDRESS) -Wl,-Map,$@.map -o $@ $<
+#$(V)$(LD) -e 0 -Ttext=$(SEGMENT_ADDRESS) -Map $@.map -o $@ $<
+#$(V)$(CC) -mabi=32 -nostdlib -e 0 -Ttext=$(SEGMENT_ADDRESS) -Wl,-Map,$@.map -o $@ $<
+
 # Override for leveldata.elf, which otherwise matches the above pattern
 .SECONDEXPANSION:
 $(BUILD_DIR)/levels/%/leveldata.elf: $(BUILD_DIR)/levels/%/leveldata.o $(BUILD_DIR)/bin/$$(TEXTURE_BIN).elf
 	$(call print,Linking ELF file:,$<,$@)
-	$(V)$(LD) -e 0 -Ttext=$(SEGMENT_ADDRESS) -Map $@.map --just-symbols=$(BUILD_DIR)/bin/$(TEXTURE_BIN).elf -o $@ $<
+	$(V)$(CC) -mabi=32 -nostdlib -e 0 -Ttext=$(SEGMENT_ADDRESS) -Wl,-Map,$@.map,-R,$(BUILD_DIR)/bin/$(TEXTURE_BIN).elf -o $@ $<
+#$(V)$(LD) -e 0 -Ttext=$(SEGMENT_ADDRESS) -Map $@.map --just-symbols=$(BUILD_DIR)/bin/$(TEXTURE_BIN).elf -o $@ $<
+#$(V)$(CC) $(CFLAGS) -e 0 -Wl,-Ttext=$(SEGMENT_ADDRESS),-Map,$@.map,--just-symbols=$(BUILD_DIR)/bin/$(TEXTURE_BIN).elf -o $@ $<
+#$(V)$(CC) -mabi=32 -Wl,-e,0,-Ttext,$(SEGMENT_ADDRESS),-Map,$@.map,-R,$(BUILD_DIR)/bin/$(TEXTURE_BIN).elf,-o,$@,$<
 
 $(BUILD_DIR)/%.bin: $(BUILD_DIR)/%.elf
 	$(call print,Extracting compressible data from:,$<,$@)
@@ -536,7 +553,9 @@ $(BUILD_DIR)/%.mio0: $(BUILD_DIR)/%.bin
 # convert binary mio0 to object file
 $(BUILD_DIR)/%.mio0.o: $(BUILD_DIR)/%.mio0
 	$(call print,Converting MIO0 to ELF:,$<,$@)
-	$(V)$(LD) -r -b binary $< -o $@
+	$(V)$(CC) -mabi=32 -r -Wl,-b,binary $< -o $@
+#$(V)$(CC) -mabi=32 -r -Wl,-b,binary $< -o $@
+#$(V)$(LD) -r -b binary $< -o $@
 
 
 #==============================================================================#
@@ -710,7 +729,7 @@ endif
 # Assemble assembly code
 $(BUILD_DIR)/%.o: %.s
 	$(call print,Assembling:,$<,$@)
-	$(V)$(CPP) $(CPPFLAGS) $< | $(AS) $(ASFLAGS) -MD $(BUILD_DIR)/$*.d -o $@
+	$(V)$(CPP) $(CPPFLAGS) $< | $(CC) $(ASFLAGS) -c -x assembler -MMD -MP -MF $(BUILD_DIR)/$*.d -o $@ -
 
 # Assemble RSP assembly code
 $(BUILD_DIR)/rsp/%.bin $(BUILD_DIR)/rsp/%_data.bin: rsp/%.s
@@ -720,7 +739,7 @@ $(BUILD_DIR)/rsp/%.bin $(BUILD_DIR)/rsp/%_data.bin: rsp/%.s
 # Run linker script through the C preprocessor
 $(BUILD_DIR)/$(LD_SCRIPT): $(LD_SCRIPT)
 	$(call print,Preprocessing linker script:,$<,$@)
-	$(V)$(CPP) $(CPPFLAGS) -DBUILD_DIR=$(BUILD_DIR) -MMD -MP -MT $@ -MF $@.d -o $@ $<
+	$(V)$(CPP) $(CPPFLAGS) -DBUILD_DIR=$(BUILD_DIR) -DLIB_DIR=$(BUILD_DIR) -DANIM_TARGET_DIR=$(BUILD_DIR) -DBIN_TARGET_DIR=$(BUILD_DIR) -MMD -MP -MT $@ -MF $@.d -o $@ $<
 
 # Link libultra
 $(BUILD_DIR)/libultra.a: $(ULTRA_O_FILES)
@@ -734,9 +753,15 @@ $(BUILD_DIR)/libgoddard.a: $(GODDARD_O_FILES)
 	$(V)$(AR) rcs -o $@ $(GODDARD_O_FILES)
 
 # Link SM64 ELF file
+SYMBOL_LINKING_FLAGS := $(addprefix -R ,$(SEG_FILES))
+LDFLAGS := -T undefined_syms.txt -T $(BUILD_DIR)/$(LD_SCRIPT) -Map $(BUILD_DIR)/sm64.$(VERSION).map --no-check-sections $(SYMBOL_LINKING_FLAGS)
+COMMA := ,
+GCC_LDFLAGS := -Wl,$(subst $() $(),$(COMMA),$(LDFLAGS))
 $(ELF): $(O_FILES) $(MIO0_OBJ_FILES) $(SEG_FILES) $(BUILD_DIR)/$(LD_SCRIPT) undefined_syms.txt $(BUILD_DIR)/libultra.a $(BUILD_DIR)/libgoddard.a
 	@$(PRINT) "$(GREEN)Linking ELF file:  $(BLUE)$@ $(NO_COL)\n"
-	$(V)$(LD) -L $(BUILD_DIR) -T undefined_syms.txt -T $(BUILD_DIR)/$(LD_SCRIPT) -Map $(BUILD_DIR)/sm64.$(VERSION).map --no-check-sections $(addprefix -R ,$(SEG_FILES)) -o $@ $(O_FILES) -lultra -lgoddard
+	$(V)$(CC) -mabi=32 -nostdlib -L $(BUILD_DIR) $(GCC_LDFLAGS) -o $@ -lultra -lgoddard
+#$(V)$(LD) -L $(BUILD_DIR) -T undefined_syms.txt -T $(BUILD_DIR)/$(LD_SCRIPT) -Map $(BUILD_DIR)/sm64.$(VERSION).map --no-check-sections $(addprefix -R ,$(SEG_FILES)) -o $@ $(O_FILES) -lultra -lgoddard
+#$(V)$(CC) -mabi=32 -nostdlib -L $(BUILD_DIR) $(GCC_LDFLAGS) -o $@ $(O_FILES) -lultra -lgoddard
 
 # Build ROM
 $(ROM): $(ELF)
